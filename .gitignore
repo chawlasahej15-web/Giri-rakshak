@@ -15,3 +15,5 @@ node_modules/
 
 # Logs
 *.log
+giri_rakshak.db
+uploads/

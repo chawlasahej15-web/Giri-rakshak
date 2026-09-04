@@ -1,0 +1,14 @@
+{
+  "templates": {
+    "CRITICAL": {
+      "en": "CRITICAL: High landslide risk detected near {zone}. Evacuate to safe zone immediately.",
+      "hi": "गंभीर चेतावनी: {zone} के पास भूस्खलन का उच्च जोखिम। तुरंत सुरक्षित स्थान पर जाएं।",
+      "ne": "गम्भीर चेतावनी: {zone} क्षेत्र नजिक पहिरोको उच्च जोखिम छ। तुरुन्त सुरक्षित स्थानमा जानुहोस्।"
+    },
+    "WARNING": {
+      "en": "WARNING: Moderate landslide risk near {zone}. Stay alert.",
+      "hi": "चेतावनी: {zone} के पास मध्यम भूस्खलन का जोखिम। सतर्क रहें।",
+      "ne": "चेतावनी: {zone} नजिक मध्यम पहिरोको जोखिम छ। सचेत रहनुहोस्।"
+    }
+  }
+}

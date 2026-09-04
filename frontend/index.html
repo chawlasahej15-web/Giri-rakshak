@@ -1,12 +1,227 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Giri-Rakshak Dashboard</title>
-    <link rel="stylesheet" href="css/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GiriRakshak | NER Landslide Early Warning System</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Chart.js for real-time sensor graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-    <h1>Giri-Rakshak</h1>
-    <p>Dashboard coming soon.</p>
-    <script src="js/app.js"></script>
+
+  <!-- Top Command Bar -->
+  <header class="navbar">
+    <div class="logo-group">
+      <img src="logo.png" alt="GiriRakshak Logo" class="brand-logo" />
+    </div>
+
+    <!-- Search Input for Cities, Districts & States -->
+    <div class="nav-search-container">
+      <div class="search-input-wrapper">
+        <span class="search-icon">🔍</span>
+        <input 
+          type="text" 
+          id="global-search-input" 
+          placeholder="Search NER city, district, or slope zone..." 
+          autocomplete="off"
+        />
+        <button id="search-clear-btn" class="search-clear-btn hidden">&times;</button>
+      </div>
+      <div id="search-suggestions" class="search-suggestions-dropdown hidden"></div>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn btn-outline" id="btn-open-report">+ Citizen Report</button>
+      <div class="system-status">
+        <span class="pulse-dot" id="status-dot"></span>
+        <span id="connection-status">NER REGIONAL: ONLINE</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Dashboard Grid -->
+  <main class="dashboard-grid">
+    
+    <!-- Map Centerpiece -->
+    <section class="map-container">
+      <div id="map"></div>
+      
+      <!-- Top-Left Region Filter Box (State / District Selector) -->
+      <div class="region-filter-card">
+        <div class="filter-header">
+          <span class="filter-icon">🌐</span>
+          <div>
+            <strong>Landslide Warning System</strong>
+            <small id="current-forecast-date">Regional Model + Aizawl IoT Node</small>
+          </div>
+        </div>
+        <div class="filter-controls">
+          <div class="control-group">
+            <label for="state-select">Select State</label>
+            <select id="state-select" class="custom-select">
+              <option value="">-- All 8 NER States --</option>
+              <option value="mizoram">Mizoram (Live ESP32 Node)</option>
+              <option value="nagaland">Nagaland</option>
+              <option value="sikkim">Sikkim</option>
+              <option value="assam">Assam</option>
+              <option value="meghalaya">Meghalaya</option>
+              <option value="manipur">Manipur</option>
+              <option value="arunachal">Arunachal Pradesh</option>
+              <option value="tripura">Tripura</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label for="district-select">Select District</label>
+            <select id="district-select" class="custom-select" disabled>
+              <option value="">-- Select District --</option>
+            </select>
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-reset-view">↺ Reset to All NER</button>
+        </div>
+      </div>
+
+      <!-- Map Legend (Orange to Red Focused) -->
+      <div class="map-legend">
+        <h4>Landslide Hazard Scale</h4>
+        <div class="legend-item"><span class="dot watch"></span> Moderate (Orange)</div>
+        <div class="legend-item"><span class="dot high"></span> High Hazard (Deep Orange)</div>
+        <div class="legend-item"><span class="dot very-high"></span> Very High (Red)</div>
+        <div class="legend-item"><span class="dot extreme"></span> Critical / Immediate Risk (Dark Red)</div>
+        <hr/>
+        <div class="legend-item"><span class="dot sensor"></span> <b>Aizawl ESP32 Edge Station</b> (Demo Node)</div>
+        <div class="legend-item"><span class="dot citizen"></span> Ground Incident Pin</div>
+        <div class="legend-note">Other districts display regional meteorological risk models.</div>
+      </div>
+    </section>
+
+    <!-- Side Intelligence Panel -->
+    <aside class="sidebar">
+      
+      <!-- Regional Situation & District Alert Panel -->
+      <section class="card" id="situation-card">
+        <div class="card-header">
+          <div class="header-with-tag">
+            <h3>Situation Brief</h3>
+            <span class="source-tag" id="data-source-tag">REGIONAL MODEL</span>
+          </div>
+          <span class="badge blue" id="risk-badge">OVERVIEW</span>
+        </div>
+        <div id="district-alert-box" class="district-alert-box">
+          <strong id="district-alert-title">North Eastern Region (NER)</strong>
+          <p id="district-alert-body">Select a state and district to focus high-resolution slope models and real-time alerts.</p>
+        </div>
+      </section>
+
+      <!-- Live Hardware Sensor Telemetry (ESP32) -->
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h3 id="telemetry-card-title">IoT Edge Telemetry</h3>
+            <small class="card-sub" id="telemetry-source-desc">Data Source: Regional Meteorological Model</small>
+          </div>
+          <span class="badge gray" id="hardware-badge">MODEL DATA</span>
+        </div>
+        <div class="sensor-stats-grid">
+          <div class="stat-box">
+            <label>Tilt Deviation</label>
+            <div class="stat-value" id="val-tilt">1.4°</div>
+          </div>
+          <div class="stat-box">
+            <label>Soil Moisture</label>
+            <div class="stat-value" id="val-moisture">48%</div>
+          </div>
+          <div class="stat-box">
+            <label>Rainfall (24h)</label>
+            <div class="stat-value" id="val-rain">42 mm</div>
+          </div>
+        </div>
+        <div class="chart-box">
+          <canvas id="telemetryChart"></canvas>
+        </div>
+      </section>
+
+      <!-- SHAP Explainable AI Breakdown -->
+      <section class="card">
+        <div class="card-header">
+          <h3>Zone Analysis & AI SHAP</h3>
+          <span class="tag" id="selected-zone-name">Click a slope zone</span>
+        </div>
+        <div id="shap-details" class="shap-panel">
+          <p class="placeholder-text">Click any hazard heatmap polygon or sensor marker to inspect feature importance values.</p>
+        </div>
+      </section>
+
+      <!-- Multilingual Emergency Dispatch -->
+      <section class="card">
+        <div class="card-header">
+          <h3>Emergency Broadcast Trigger</h3>
+        </div>
+        <div class="dispatch-form">
+          <label>Target Regional Language:</label>
+          <select id="lang-select" class="custom-select">
+            <option value="en">English</option>
+            <option value="mz">Mizo (NER Native)</option>
+            <option value="as">Assamese</option>
+            <option value="bn">Bengali</option>
+          </select>
+          <div class="alert-preview-box" id="alert-preview-text">
+            "Warning: Heavy antecedent rainfall. Slope instability monitored in selected district."
+          </div>
+          <button class="btn btn-danger btn-full" id="btn-trigger-alert">📢 Transmit Emergency Alert (SMS/IVR)</button>
+        </div>
+      </section>
+
+    </aside>
+  </main>
+
+  <!-- Citizen Report Modal -->
+  <div id="report-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Submit Citizen Field Report</h3>
+        <button type="button" class="modal-close" id="modal-close">&times;</button>
+      </div>
+      <form id="report-form">
+        <div class="form-group">
+          <label>Hazard Type</label>
+          <select id="rep-type" class="custom-select" required>
+            <option value="Road Surface Tension Crack">Road Surface Tension Crack</option>
+            <option value="Mud / Rock Runoff">Mud / Rock Runoff</option>
+            <option value="Retaining Wall Tilt">Retaining Wall Tilt</option>
+            <option value="Culvert / Drainage Clog">Culvert / Drainage Clog</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Location Coordinates (Lat, Lng)</label>
+          <input type="text" id="rep-coords" readonly />
+        </div>
+
+        <div class="form-group">
+          <label>Attach Calamity Ground Photo</label>
+          <input type="file" id="rep-image" accept="image/*" class="custom-file-input" />
+          <div id="image-preview-wrapper" class="image-preview-wrapper hidden">
+            <img id="image-preview" src="" alt="Incident Preview" />
+            <button type="button" id="btn-remove-image" class="btn-remove-preview">&times;</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Field Notes / Description</label>
+          <textarea id="rep-desc" rows="3" placeholder="Describe slope movement, crack length, or water pooling..." required></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full">🚀 Send Geo-Tagged Incident Report</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Leaflet JS & Dashboard Code -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="dashboard.js"></script>
 </body>
 </html>

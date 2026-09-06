@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <!-- Chart.js for real-time sensor graphs -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
@@ -35,7 +35,7 @@
     </div>
 
     <div class="header-actions">
-      <button class="btn btn-outline" id="btn-open-report">+ Citizen Report</button>
+      <a href="report.html" class="btn btn-outline" style="text-decoration: none;">📍 + Citizen Report</a>
       <div class="system-status">
         <span class="pulse-dot" id="status-dot"></span>
         <span id="connection-status">NER REGIONAL: ONLINE</span>
@@ -177,48 +177,6 @@
 
     </aside>
   </main>
-
-  <!-- Citizen Report Modal -->
-  <div id="report-modal" class="modal-overlay hidden">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3>Submit Citizen Field Report</h3>
-        <button type="button" class="modal-close" id="modal-close">&times;</button>
-      </div>
-      <form id="report-form">
-        <div class="form-group">
-          <label>Hazard Type</label>
-          <select id="rep-type" class="custom-select" required>
-            <option value="Road Surface Tension Crack">Road Surface Tension Crack</option>
-            <option value="Mud / Rock Runoff">Mud / Rock Runoff</option>
-            <option value="Retaining Wall Tilt">Retaining Wall Tilt</option>
-            <option value="Culvert / Drainage Clog">Culvert / Drainage Clog</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Location Coordinates (Lat, Lng)</label>
-          <input type="text" id="rep-coords" readonly />
-        </div>
-
-        <div class="form-group">
-          <label>Attach Calamity Ground Photo</label>
-          <input type="file" id="rep-image" accept="image/*" class="custom-file-input" />
-          <div id="image-preview-wrapper" class="image-preview-wrapper hidden">
-            <img id="image-preview" src="" alt="Incident Preview" />
-            <button type="button" id="btn-remove-image" class="btn-remove-preview">&times;</button>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>Field Notes / Description</label>
-          <textarea id="rep-desc" rows="3" placeholder="Describe slope movement, crack length, or water pooling..." required></textarea>
-        </div>
-
-        <button type="submit" class="btn btn-primary btn-full">🚀 Send Geo-Tagged Incident Report</button>
-      </form>
-    </div>
-  </div>
 
   <!-- Leaflet JS & Dashboard Code -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

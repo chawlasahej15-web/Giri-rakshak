@@ -1,165 +1,350 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Giri-Rakshak | Report Landslide Incident</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f7f6;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-        }
-        .card {
-            background: #ffffff;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            max-width: 450px;
-            width: 100%;
-        }
-        h2 {
-            margin-top: 0;
-            color: #d9534f;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        input, select, textarea {
-            width: 100%;
-            padding: 10px;
-            box-sizing: border-box;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        button {
-            width: 100%;
-            padding: 12px;
-            background-color: #0275d8;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 16px;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-        button.geo-btn {
-            background-color: #5cb85c;
-            margin-top: 5px;
-        }
-        button:hover {
-            opacity: 0.9;
-        }
-        #status {
-            margin-top: 15px;
-            font-weight: bold;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GiriRakshak | Submit Citizen Field Report</title>
+  <style>
+    :root {
+      --bg-dark: #0a0f1d;
+      --card-bg: #111a2e;
+      --border-color: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-blue: #0284c7;
+      --accent-hover: #0369a1;
+      --accent-red: #ef4444;
+      --accent-green: #22c55e;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .report-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 480px;
+      padding: 24px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    }
+
+    .back-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--accent-blue);
+      text-decoration: none;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      transition: color 0.2s;
+    }
+
+    .back-nav:hover {
+      color: #38bdf8;
+      text-decoration: underline;
+    }
+
+    .card-header h2 {
+      font-size: 1.25rem;
+      color: var(--accent-red);
+      margin-bottom: 4px;
+    }
+
+    .card-header p {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      background: #0b1329;
+      border: 1px solid #334155;
+      color: var(--text-main);
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
+    }
+
+    .geo-btn {
+      width: 100%;
+      background: #166534;
+      color: #dcfce7;
+      border: 1px solid #22c55e;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: background 0.2s;
+    }
+
+    .geo-btn:hover {
+      background: #15803d;
+    }
+
+    .coords-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .file-input {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .image-preview-wrapper {
+      position: relative;
+      margin-top: 10px;
+      max-height: 140px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #334155;
+      display: none;
+    }
+
+    .image-preview-wrapper img {
+      width: 100%;
+      height: 140px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .btn-remove-preview {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: rgba(15, 23, 42, 0.8);
+      color: #fff;
+      border: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .submit-btn {
+      width: 100%;
+      background: var(--accent-blue);
+      color: #ffffff;
+      border: none;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: background 0.2s;
+    }
+
+    .submit-btn:hover {
+      background: var(--accent-hover);
+    }
+
+    #status-msg {
+      margin-top: 14px;
+      font-size: 0.8rem;
+      text-align: center;
+      font-weight: 600;
+    }
+  </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>Giri-Rakshak Incident Report</h2>
-    <p>Report cracks, slope movement, or active landslides immediately.</p>
+  <div class="report-card">
+    <a href="index.html" class="back-nav">← Back to Monitoring Grid</a>
     
-    <form id="reportForm">
-        <div class="form-group">
-            <label for="reporter_name">Reporter Name / Phone</label>
-            <input type="text" id="reporter_name" required placeholder="+91XXXXXXXXXX or Name">
-        </div>
+    <div class="card-header">
+      <h2>Submit Ground Citizen Hazard</h2>
+      <p>Log real-time slope observations and incident photos directly to the EWS map.</p>
+    </div>
 
-        <div class="form-group">
-            <label for="description">Observation Details</label>
-            <textarea id="description" rows="3" required placeholder="Describe soil movement, road cracks, or rockfalls..."></textarea>
-        </div>
+    <form id="standalone-report-form">
+      <div class="form-group">
+        <label>Observed Phenomenon</label>
+        <select id="rep-type" required>
+          <option value="Road Surface Tension Crack">Road Surface Tension Crack</option>
+          <option value="Mud / Rock Runoff">Mud / Rock Runoff</option>
+          <option value="Retaining Wall Tilt">Retaining Wall Tilt</option>
+          <option value="Culvert / Drainage Clog">Culvert / Drainage Clog</option>
+        </select>
+      </div>
 
-        <div class="form-group">
-            <label>Location Coordinates</label>
-            <button type="button" class="geo-btn" onclick="getLocation()">📍 Use My Location (Auto-GPS)</button>
-            <div style="display: flex; gap: 10px; margin-top: 8px;">
-                <input type="number" step="any" id="lat" placeholder="Latitude" required>
-                <input type="number" step="any" id="lon" placeholder="Longitude" required>
-            </div>
+      <div class="form-group">
+        <label>Geolocation Stamp</label>
+        <button type="button" class="geo-btn" id="btn-gps">📍 Auto-Detect GPS Coordinates</button>
+        <div class="coords-row">
+          <input type="number" step="any" id="rep-lat" placeholder="Latitude" required />
+          <input type="number" step="any" id="rep-lng" placeholder="Longitude" required />
         </div>
+      </div>
 
-        <div class="form-group">
-            <label for="photo">Upload Incident Photo</label>
-            <input type="file" id="photo" accept="image/*" capture="environment">
+      <div class="form-group">
+        <label>Attach Calamity Ground Photo</label>
+        <input type="file" id="rep-image" accept="image/*" class="file-input" />
+        <div id="image-preview-wrapper" class="image-preview-wrapper">
+          <img id="image-preview" src="" alt="Incident Preview" />
+          <button type="button" id="btn-remove-image" class="btn-remove-preview">&times;</button>
         </div>
+      </div>
 
-        <button type="submit">Submit Incident Report</button>
+      <div class="form-group">
+        <label>Field Notes / Description</label>
+        <textarea id="rep-desc" rows="3" placeholder="Describe fracture width, active seepage, or rock noise..." required></textarea>
+      </div>
+
+      <button type="submit" class="submit-btn">🚀 Report Incident</button>
     </form>
 
-    <div id="status"></div>
-</div>
+    <div id="status-msg"></div>
+  </div>
 
-<script>
-    function getLocation() {
-        const status = document.getElementById('status');
-        if (navigator.geolocation) {
-            status.innerText = "Acquiring GPS location...";
-            status.style.color = "blue";
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    document.getElementById('lat').value = position.coords.latitude.toFixed(6);
-                    document.getElementById('lon').value = position.coords.longitude.toFixed(6);
-                    status.innerText = "Location updated!";
-                    status.style.color = "green";
-                },
-                (error) => {
-                    status.innerText = "Unable to retrieve location. Please enter manually.";
-                    status.style.color = "red";
-                }
-            );
-        } else {
-            status.innerText = "Geolocation is not supported by your browser.";
-            status.style.color = "red";
-        }
-    }
+  <script>
+    let uploadedImageBase64 = null;
+    const previewWrapper = document.getElementById('image-preview-wrapper');
+    const previewImg = document.getElementById('image-preview');
+    const repImageInput = document.getElementById('rep-image');
+    const statusMsg = document.getElementById('status-msg');
 
-    document.getElementById('reportForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const status = document.getElementById('status');
-        status.innerText = "Submitting report...";
-        status.style.color = "blue";
-
-        const payload = {
-            reporter_info: document.getElementById('reporter_name').value,
-            description: document.getElementById('description').value,
-            lat: parseFloat(document.getElementById('lat').value),
-            lon: parseFloat(document.getElementById('lon').value),
-            timestamp: new Date().toISOString()
+    // Handle Photo Preview & Base64 storage
+    repImageInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          uploadedImageBase64 = evt.target.result;
+          previewImg.src = uploadedImageBase64;
+          previewWrapper.style.display = 'block';
         };
-
-        try {
-            const response = await fetch('/api/citizen-report', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (response.ok) {
-                status.innerText = "Report submitted successfully! Dashboard updated.";
-                status.style.color = "green";
-                document.getElementById('reportForm').reset();
-            } else {
-                status.innerText = "Submitted locally (Backend endpoint connecting soon).";
-                status.style.color = "orange";
-            }
-        } catch (err) {
-            status.innerText = "Report recorded locally (Awaiting live backend deployment).";
-            status.style.color = "orange";
-        }
+        reader.readAsDataURL(file);
+      }
     });
-</script>
 
+    document.getElementById('btn-remove-image').onclick = () => {
+      repImageInput.value = '';
+      uploadedImageBase64 = null;
+      previewWrapper.style.display = 'none';
+      previewImg.src = '';
+    };
+
+    // Auto-detect GPS (defaults to Aizawl coordinates if blocked on desktop)
+    document.getElementById('btn-gps').onclick = () => {
+      statusMsg.innerText = "Acquiring GPS fix...";
+      statusMsg.style.color = "var(--accent-blue)";
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            document.getElementById('rep-lat').value = pos.coords.latitude.toFixed(4);
+            document.getElementById('rep-lng').value = pos.coords.longitude.toFixed(4);
+            statusMsg.innerText = "GPS locked successfully!";
+            statusMsg.style.color = "var(--accent-green)";
+          },
+          () => {
+            // Fallback default coordinates (Aizawl region)
+            document.getElementById('rep-lat').value = "23.7307";
+            document.getElementById('rep-lng').value = "92.7173";
+            statusMsg.innerText = "GPS unavailable. Set default to Aizawl slope coordinates.";
+            statusMsg.style.color = "var(--text-muted)";
+          }
+        );
+      }
+    };
+
+    // Form Submission: Sync to localStorage and redirect back to dashboard
+    document.getElementById('standalone-report-form').onsubmit = async (e) => {
+      e.preventDefault();
+      statusMsg.innerText = "Pinning to dashboard map...";
+      statusMsg.style.color = "var(--accent-blue)";
+
+      const lat = parseFloat(document.getElementById('rep-lat').value);
+      const lng = parseFloat(document.getElementById('rep-lng').value);
+      const hazardType = document.getElementById('rep-type').value;
+      const desc = document.getElementById('rep-desc').value;
+
+      const newReport = {
+        lat: lat,
+        lng: lng,
+        type: hazardType,
+        desc: desc,
+        image: uploadedImageBase64,
+        timestamp: new Date().toISOString()
+      };
+
+      // 1. Save to persistent localStorage for index.html map consumption
+      try {
+        const list = JSON.parse(localStorage.getItem('giri_citizen_reports') || '[]');
+        list.push(newReport);
+        localStorage.setItem('giri_citizen_reports', JSON.stringify(list));
+        localStorage.setItem('giri_latest_report', JSON.stringify(newReport));
+      } catch (err) {
+        console.warn('Storage failed:', err);
+      }
+
+      // 2. Optional POST to backend
+      const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+        ? 'http://localhost:8000'
+        : 'https://girirakshak-api.onrender.com';
+
+      try {
+        await fetch(`${API_BASE}/api/citizen-report`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newReport)
+        });
+      } catch (err) {}
+
+      statusMsg.innerText = "✅ Incident successfully pinned! Returning to map...";
+      statusMsg.style.color = "var(--accent-green)";
+
+      // Return to dashboard map view after short pause
+      setTimeout(() => {
+        window.location.href = "index.html";
+      }, 900);
+    };
+  </script>
 </body>
 </html>

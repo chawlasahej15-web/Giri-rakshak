@@ -434,7 +434,6 @@ async function fetchLiveWeatherForDistrict(lat, lng) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     
-    // Convert Open-Meteo m³/m³ volumetric soil moisture to estimated percentage
     const rawSoil = data.current?.soil_moisture_0_to_1cm ?? 0.35;
     const moistPercent = Math.min(98, Math.max(30, Math.round(rawSoil * 180)));
     const dailyRain = data.daily?.precipitation_sum?.[0] ?? Math.round(Math.random() * 40 + 30);
@@ -449,20 +448,18 @@ async function fetchLiveWeatherForDistrict(lat, lng) {
   }
 }
 
-// Synchronize all 8 NER states with live API data on load
+// Synchronize all 8 NER states with live API data on load (Updates memory without wiping markers)
 async function syncAllRegionalLiveFeeds() {
   for (const sKey of Object.keys(nerData)) {
     const state = nerData[sKey];
     for (const dKey of Object.keys(state.districts)) {
       const dist = state.districts[dKey];
-      // Keep Aizawl fixed to the stage demonstration profile
-      if (dist.isHardwareNode) continue;
+      if (dist.isHardwareNode) continue; // Keep Aizawl fixed to hardware demo profile
 
       const live = await fetchLiveWeatherForDistrict(dist.center[0], dist.center[1]);
       if (live) {
         dist.telemetry.rain = live.rain;
         dist.telemetry.moisture = live.moisture;
-        // Dynamically compute risk score from live rainfall + slope angle
         const calculatedRisk = Math.min(96, Math.max(45, Math.round(live.rain * 0.45 + live.moisture * 0.4)));
         dist.riskScore = calculatedRisk;
         if (calculatedRisk >= 85) dist.riskLevel = 'extreme';
@@ -471,19 +468,16 @@ async function syncAllRegionalLiveFeeds() {
       }
     }
   }
-  renderAllNEROverview();
 }
 
 // =========================================================================
-// 7. Dendritic Geological Ridge Heatmap (Matches Reference Photo)
+// 7. Dendritic Geological Ridge Heatmap
 // =========================================================================
 function renderDendriticRidgeHeatmap() {
   rasterHeatmapGroup.clearLayers();
 
-  // Bounding box covering the high-risk mountain corridor (Nagaland / Assam / Mizoram axis)
   const bounds = [[24.8, 93.1], [27.2, 95.3]];
 
-  // Organic vector heatmap with blue catchment base + orange buffer + deep red ridge spine
   const svgHeatmap = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="100%" height="100%">
       <defs>
@@ -515,7 +509,7 @@ function renderDendriticRidgeHeatmap() {
       <path d="M 280,430 Q 320,380 390,360 T 480,280" fill="none" stroke="#7dd3fc" stroke-width="32" stroke-linecap="round" opacity="0.35" filter="url(#glow)"/>
       <path d="M 330,520 Q 370,470 430,410 T 490,360" fill="none" stroke="#7dd3fc" stroke-width="26" stroke-linecap="round" opacity="0.35" filter="url(#glow)"/>
 
-      <!-- 2. Orange Buffer Slopes (High Susceptibility Halo) -->
+      <!-- 2. Orange Buffer Slopes -->
       <g stroke="#ea580c" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.8" filter="url(#glow)">
         <path d="M 240,560 Q 280,480 330,440 T 410,330 T 490,210 T 540,140" stroke-width="15"/>
         <path d="M 330,440 Q 380,410 430,430 T 500,450" stroke-width="12"/>
@@ -523,7 +517,7 @@ function renderDendriticRidgeHeatmap() {
         <path d="M 270,590 Q 310,540 360,520 T 430,490" stroke-width="12"/>
       </g>
 
-      <!-- 3. Red Dendritic Ridge Network (Critical Failure Spines) -->
+      <!-- 3. Red Dendritic Ridge Network -->
       <g stroke="#991b1b" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.95">
         <path d="M 240,560 Q 280,480 330,440 T 410,330 T 490,210 T 540,140" stroke-width="5.5"/>
         <path d="M 330,440 Q 380,410 430,430 T 500,450" stroke-width="4.5"/>
@@ -550,7 +544,7 @@ function renderDendriticRidgeHeatmap() {
   rasterHeatmapGroup.addLayer(imageOverlay);
 }
 
-// 8. Master Render: Boundaries, Polygons & Single Aizawl ESP Marker
+// 8. Master Render: Boundaries, Polygons, Single Aizawl ESP Marker & Saved Reports
 function renderAllNEROverview() {
   stateLayerGroup.clearLayers();
   zoneLayerGroup.clearLayers();
@@ -630,6 +624,9 @@ function renderAllNEROverview() {
     marker.bindPopup(`<b>Citizen Field Incident</b><br/><b>Type:</b> ${rep.type}<br/><b>Location:</b> ${rep.place}<br/><i>"${rep.text}"</i>`);
     citizenMarkerGroup.addLayer(marker);
   });
+
+  // Load dynamically stored citizen submissions from report.html
+  loadSavedCitizenReports();
 
   resetOverviewSidebar();
 }
@@ -810,18 +807,6 @@ document.getElementById('btn-reset-view').addEventListener('click', () => {
   renderAllNEROverview();
 });
 
-// Heatmap Checkbox Toggle
-const toggleHeatmapBtn = document.getElementById('toggle-gis-heatmap');
-if (toggleHeatmapBtn) {
-  toggleHeatmapBtn.addEventListener('change', (e) => {
-    if (e.target.checked) {
-      rasterHeatmapGroup.addTo(map);
-    } else {
-      map.removeLayer(rasterHeatmapGroup);
-    }
-  });
-}
-
 // 12. Alert Preview & Dispatch Trigger
 document.getElementById('lang-select').addEventListener('change', (e) => {
   const lang = e.target.value;
@@ -833,114 +818,78 @@ document.getElementById('btn-trigger-alert').addEventListener('click', () => {
   alert(`[SIH DEMO ACTION] Emergency Broadcast Transmitted via SMS & IVR:\n\n${translations[lang]}`);
 });
 
-// 13. Citizen Field Incident Reporting
-const reportModal = document.getElementById('report-modal');
-const btnOpenReport = document.getElementById('btn-open-report');
-const btnCloseReport = document.getElementById('modal-close');
-const reportForm = document.getElementById('report-form');
-const repCoordsInput = document.getElementById('rep-coords');
-const repImageInput = document.getElementById('rep-image');
-const previewWrapper = document.getElementById('image-preview-wrapper');
-const previewImg = document.getElementById('image-preview');
-const btnRemoveImage = document.getElementById('btn-remove-image');
-let uploadedImageBase64 = null;
+// =========================================================================
+// 13. Citizen Field Incident Sync Engine (Listens to report.html)
+// =========================================================================
 
-function resetCitizenForm() {
-  reportForm.reset();
-  uploadedImageBase64 = null;
-  previewWrapper.classList.add('hidden');
-  previewImg.src = '';
-}
-
-btnOpenReport.onclick = () => {
-  const c = map.getCenter();
-  repCoordsInput.value = `${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`;
-  reportModal.classList.remove('hidden');
-};
-
-btnCloseReport.onclick = () => {
-  reportModal.classList.add('hidden');
-  resetCitizenForm();
-};
-
-reportModal.addEventListener('click', (e) => {
-  if (e.target === reportModal) {
-    reportModal.classList.add('hidden');
-    resetCitizenForm();
+function renderCitizenMarker(lat, lng, hazardType, description, imageBase64, flyTo = false) {
+  const validLat = parseFloat(lat);
+  const validLng = parseFloat(lng);
+  if (isNaN(validLat) || isNaN(validLng)) {
+    console.warn('[Citizen Sync] Invalid coordinates received:', lat, lng);
+    return;
   }
-});
-
-repImageInput.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      uploadedImageBase64 = event.target.result;
-      previewImg.src = uploadedImageBase64;
-      previewWrapper.classList.remove('hidden');
-    };
-    reader.readAsDataURL(file);
-  }
-});
-
-btnRemoveImage.addEventListener('click', () => {
-  repImageInput.value = '';
-  uploadedImageBase64 = null;
-  previewWrapper.classList.add('hidden');
-  previewImg.src = '';
-});
-
-reportForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const hazardType = document.getElementById('rep-type').value;
-  const description = document.getElementById('rep-desc').value;
-  const coords = repCoordsInput.value.split(',').map(n => parseFloat(n.trim()));
-  const imageFile = repImageInput.files[0];
-
-  const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:8000'
-    : '';
-
-  const formData = new FormData();
-  formData.append('hazard_type', hazardType);
-  formData.append('description', description);
-  formData.append('latitude', coords[0]);
-  formData.append('longitude', coords[1]);
-  if (imageFile) formData.append('image', imageFile);
-
-  try {
-    fetch(`${API_BASE_URL}/api/citizen-report`, { method: 'POST', body: formData })
-      .then(res => res.json())
-      .then(d => console.log('[EWS API] Report saved in DB:', d))
-      .catch(err => console.warn('[EWS API] Backend offline. Dropping client-side pin:', err.message));
-  } catch (err) {}
 
   const citIcon = L.divIcon({
-    html: `<div style="background: #0284c7; border: 2px solid white; width: 16px; height: 16px; border-radius: 4px; box-shadow: 0 0 8px rgba(2,132,199,0.7);"></div>`,
+    html: `<div style="background: #0284c7; border: 2.5px solid white; width: 16px; height: 16px; border-radius: 4px; box-shadow: 0 0 10px rgba(2,132,199,0.85); cursor:pointer;"></div>`,
     iconSize: [16, 16]
   });
 
-  const marker = L.marker([coords[0], coords[1]], { icon: citIcon });
-  const imgHtml = uploadedImageBase64 
-    ? `<img src="${uploadedImageBase64}" class="popup-incident-image" alt="Field Photo" />` 
+  const marker = L.marker([validLat, validLng], { icon: citIcon });
+  const imgHtml = imageBase64 
+    ? `<div style="margin-top:6px;"><img src="${imageBase64}" style="width:100%; height:110px; object-fit:cover; border-radius:6px; display:block;" alt="Field Photo" /></div>` 
     : '';
 
   marker.bindPopup(`
-    <div style="min-width: 170px;">
-      <span class="badge blue" style="margin-bottom: 4px; display:inline-block;">GROUND CITIZEN REPORT</span>
+    <div style="min-width: 180px; max-width: 220px;">
+      <span class="badge blue" style="margin-bottom: 4px; display:inline-block; font-size:0.65rem; padding:2px 6px; border-radius:3px; background:#e0f2fe; color:#0369a1; font-weight:bold;">GROUND CITIZEN REPORT</span>
       <h4 style="font-size: 0.86rem; color: #0f172a; margin: 0;">${hazardType}</h4>
       <p style="font-size: 0.76rem; color: #475569; margin: 4px 0 6px;">"${description}"</p>
       ${imgHtml}
-      <small style="color: #94a3b8; font-size: 0.65rem;">GPS: ${coords[0]}, ${coords[1]}</small>
+      <small style="color: #94a3b8; font-size: 0.65rem; display:block; margin-top:4px;">GPS: ${validLat.toFixed(4)}, ${validLng.toFixed(4)}</small>
     </div>
-  `).openPopup();
+  `);
 
   citizenMarkerGroup.addLayer(marker);
-  map.flyTo([coords[0], coords[1]], Math.max(map.getZoom(), 13), { duration: 1.0 });
 
-  reportModal.classList.add('hidden');
-  resetCitizenForm();
-  alert("Field Incident Geotagged and Pinned to GiriRakshak Map!");
+  if (flyTo) {
+    map.flyTo([validLat, validLng], Math.max(map.getZoom(), 13), { duration: 1.0 });
+    setTimeout(() => marker.openPopup(), 1100);
+  }
+}
+
+// Load and display all reports saved in localStorage
+function loadSavedCitizenReports() {
+  try {
+    const storedReports = JSON.parse(localStorage.getItem('giri_citizen_reports') || '[]');
+    const isRedirect = sessionStorage.getItem('just_reported') === 'true';
+
+    storedReports.forEach((r, idx) => {
+      const lat = r.lat || r.latitude;
+      const lng = r.lng || r.lon || r.longitude;
+      const type = r.type || r.hazard_type || "Ground Incident";
+      const desc = r.desc || r.description || "";
+      const isLatest = (idx === storedReports.length - 1);
+
+      renderCitizenMarker(lat, lng, type, desc, r.image, isLatest && isRedirect);
+    });
+
+    sessionStorage.removeItem('just_reported');
+  } catch (err) {
+    console.warn('[Citizen Sync] Local reports load failed:', err);
+  }
+}
+
+// Live Multi-Tab Sync
+window.addEventListener('storage', (e) => {
+  if (e.key === 'giri_latest_report' && e.newValue) {
+    const r = JSON.parse(e.newValue);
+    const lat = r.lat || r.latitude;
+    const lng = r.lng || r.lon || r.longitude;
+    const type = r.type || r.hazard_type || "Ground Incident";
+    const desc = r.desc || r.description || "";
+    renderCitizenMarker(lat, lng, type, desc, r.image, true);
+  }
 });
 
 // 14. Global Search & Autocomplete
@@ -1084,7 +1033,7 @@ setInterval(() => {
 // 16. Boot System & Fetch Live Feeds
 initChart();
 renderAllNEROverview();
-syncAllRegionalLiveFeeds(); // Ingest live 24h precipitation for all 8 states
+syncAllRegionalLiveFeeds();
 
 setTimeout(() => map.invalidateSize(), 200);
 window.addEventListener('resize', () => map.invalidateSize());

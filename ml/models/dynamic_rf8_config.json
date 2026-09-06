@@ -1,0 +1,23 @@
+{
+  "model_name": "RF_8",
+  "model_type": "RandomForestClassifier",
+  "features": [
+    "rainfall_1d",
+    "rainfall_3d",
+    "rainfall_7d",
+    "rainfall_15d"
+  ],
+  "training_rows": 1620,
+  "positive_rows": 749,
+  "negative_rows": 871,
+  "n_estimators": 1000,
+  "max_depth": 20,
+  "min_samples_leaf": 2,
+  "max_features": "sqrt",
+  "class_weight": "balanced",
+  "random_state": 12345,
+  "output_type": "continuous_probability",
+  "threshold_applied": false,
+  "aizawl_used": false,
+  "fusion_data_used": false
+}

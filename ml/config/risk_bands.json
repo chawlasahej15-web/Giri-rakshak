@@ -1,0 +1,22 @@
+{
+  "low": {
+    "min": 0.0,
+    "max": 0.10,
+    "label": "Low"
+  },
+  "moderate": {
+    "min": 0.10,
+    "max": 0.40,
+    "label": "Moderate"
+  },
+  "high": {
+    "min": 0.40,
+    "max": 0.80,
+    "label": "High"
+  },
+  "very_high": {
+    "min": 0.80,
+    "max": 1.01,
+    "label": "Very High"
+  }
+}

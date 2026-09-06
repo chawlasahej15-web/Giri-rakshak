@@ -17,3 +17,5 @@ node_modules/
 *.log
 giri_rakshak.db
 uploads/
+# Pytest
+.pytest_cache/

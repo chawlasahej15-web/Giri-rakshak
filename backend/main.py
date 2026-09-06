@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from database import Base, engine
 import models
 
@@ -8,12 +9,20 @@ from routes.alerts import router as alerts_router
 from routes.reports import router as reports_router
 
 app = FastAPI(
+
     title="GiriRakshak API",
     description="Backend API for AI-powered landslide monitoring",
     version="1.0.0"
 )
 
 Base.metadata.create_all(bind=engine)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5500"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(sensors_router)
 app.include_router(risk_router)

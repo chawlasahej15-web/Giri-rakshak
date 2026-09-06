@@ -469,7 +469,33 @@ async function syncAllRegionalLiveFeeds() {
     }
   }
 }
+// ===========================================
+// BACKEND ML RISK DATA
+// ===========================================
+async function loadBackendRiskZones() {
+  const API_BASE =
+    (window.location.hostname === 'localhost' ||
+     window.location.hostname === '127.0.0.1')
+      ? 'http://localhost:8000'
+      : 'https://girirakshak-api.onrender.com';
 
+  try {
+    const response = await fetch(`${API_BASE}/api/risk-zones`);
+
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
+    }
+
+    const zones = await response.json();
+
+    console.log("Backend ML Risk Zones:", zones);
+
+    return zones;
+  } catch (error) {
+    console.error("Failed to load backend risk zones:", error);
+    return [];
+  }
+}
 // =========================================================================
 // 7. Dendritic Geological Ridge Heatmap
 // =========================================================================
@@ -1033,6 +1059,7 @@ setInterval(() => {
 // 16. Boot System & Fetch Live Feeds
 initChart();
 renderAllNEROverview();
+loadBackendRiskZones();
 syncAllRegionalLiveFeeds();
 
 setTimeout(() => map.invalidateSize(), 200);

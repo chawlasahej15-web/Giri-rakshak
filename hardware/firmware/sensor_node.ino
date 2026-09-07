@@ -5,32 +5,34 @@
 #include <time.h>
 
 // =====================================================
-//                    WIFI SETTINGS
+//                    CONFIG
 // =====================================================
 
-// Put your WiFi name here
-const char* WIFI_SSID = "WIFI NAME";
+// Fill these before uploading.
+const char* WIFI_SSID = "Ayush Mahapatra";
+const char* WIFI_PASSWORD = "ayush@2006";
 
-// Put your WiFi password here
-const char* WIFI_PASSWORD = "WIFI PASSWORD";
-
-// IMPORTANT:
-// Replace 192.168.1.7 with the IP address you got from
-// running: hostname -I
-//
-// DO NOT use localhost here.
+// Replace YOUR_LAPTOP_IP with the current IP of the laptop
+// running FastAPI. Do NOT use localhost.
+// Example: http://172.22.202.89:8000/api/sensor-data
 const char* BACKEND_URL =
-  "http://IP_ADDRESS:8000/api/sensor-data";
+  "http://172.22.202.89:8000/api/sensor-data";
+
+const char* SENSOR_ID = "ESP32_01";
+
+// Aizawl demonstration node.
+// This matches the physical ESP32 marker in the frontend.
+const float LATITUDE = 23.739000;
+const float LONGITUDE = 92.719000;
 
 
 // =====================================================
-//                    PIN SETTINGS
+//                    PINS
 // =====================================================
 
 #define SDA_PIN 21
 #define SCL_PIN 22
 
-// Your sensor is MPU6500 at I2C address 0x68
 #define MPU_ADDR 0x68
 
 #define SOIL_SENSOR_PIN 34
@@ -40,13 +42,13 @@ const char* BACKEND_URL =
 
 
 // =====================================================
-//                  SENSOR THRESHOLDS
+//                  THRESHOLDS
 // =====================================================
 
-// Alarm if tilt is greater than 15 degrees
+// Alarm if tilt is greater than 15 degrees.
 const float TILT_THRESHOLD = 15.0;
 
-// Alarm if moisture is greater than 80%
+// Alarm if soil moisture is greater than 80%.
 const float MOISTURE_THRESHOLD = 80.0;
 
 
@@ -54,7 +56,6 @@ const float MOISTURE_THRESHOLD = 80.0;
 //                  MPU CALIBRATION
 // =====================================================
 
-// Your existing calibration values
 const float ROLL_OFFSET = 0.3;
 const float PITCH_OFFSET = -1.9;
 
@@ -63,60 +64,64 @@ const float PITCH_OFFSET = -1.9;
 //              SOIL SENSOR CALIBRATION
 // =====================================================
 
-// Your existing calibration values
 const int DRY_VALUE = 3000;
 const int WET_VALUE = 1300;
 
 
 // =====================================================
-//                  LOCATION
+//                    TIMING
 // =====================================================
 
-// Hardcoded latitude and longitude
-const float LATITUDE = 28.6139;
-const float LONGITUDE = 77.2090;
-
-
-// =====================================================
-//                     TIMING
-// =====================================================
-
-// Send data to backend every 5 seconds
 const unsigned long SEND_INTERVAL = 5000;
-unsigned long lastSendTime = 0;
-
-// Print readings every 1 second
 const unsigned long PRINT_INTERVAL = 1000;
-unsigned long lastPrintTime = 0;
 
+// Wi-Fi retry interval after a failed attempt.
+const unsigned long WIFI_RETRY_INTERVAL = 10000;
 
-// =====================================================
-//                  BUZZER SETTINGS
-// =====================================================
+// Maximum time allowed for one background Wi-Fi attempt.
+const unsigned long WIFI_ATTEMPT_TIMEOUT = 15000;
 
-// Frequency for passive buzzer
 const int BUZZER_FREQUENCY = 2000;
 
-
-// =====================================================
-//                  SENSOR VARIABLES
-// =====================================================
-
-float accelX = 0;
-float accelY = 0;
-float accelZ = 0;
-
-float roll = 0;
-float pitch = 0;
-
-float correctedRoll = 0;
-float correctedPitch = 0;
-
-float moisturePercent = 0;
+unsigned long lastSendTime = 0;
+unsigned long lastPrintTime = 0;
+unsigned long lastWiFiRetryTime = 0;
 
 
 // =====================================================
-//                       ALERTS
+//                  WIFI STATE
+// =====================================================
+
+// IMPORTANT:
+// Wi-Fi connection is NON-BLOCKING.
+//
+// This ensures:
+// Sensor reading + buzzer + LED
+// continue even when Wi-Fi is unavailable.
+
+bool wifiConnecting = false;
+unsigned long wifiAttemptStartTime = 0;
+
+
+// =====================================================
+//                  SENSOR STATE
+// =====================================================
+
+float accelX = 0.0;
+float accelY = 0.0;
+float accelZ = 0.0;
+
+float roll = 0.0;
+float pitch = 0.0;
+
+float correctedRoll = 0.0;
+float correctedPitch = 0.0;
+
+float moisturePercent = 0.0;
+
+
+// =====================================================
+//                     ALERTS
 // =====================================================
 
 bool tiltAlert = false;
@@ -125,61 +130,240 @@ bool alarmActive = false;
 
 
 // =====================================================
+//              START WIFI CONNECTION
+// =====================================================
+
+void startWiFiConnection() {
+
+  // Already connected.
+  if (
+    WiFi.status() == WL_CONNECTED
+  ) {
+    return;
+  }
+
+  // Already trying.
+  if (wifiConnecting) {
+    return;
+  }
+
+  Serial.println();
+  Serial.println(
+    "Starting WiFi connection attempt..."
+  );
+
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+
+  WiFi.begin(
+    WIFI_SSID,
+    WIFI_PASSWORD
+  );
+
+  wifiConnecting = true;
+
+  wifiAttemptStartTime =
+    millis();
+
+  Serial.println(
+    "WiFi connection running in background."
+  );
+}
+
+
+// =====================================================
+//              MAINTAIN WIFI CONNECTION
+// =====================================================
+
+void maintainWiFi() {
+
+  // ---------------------------------------------------
+  // Connected
+  // ---------------------------------------------------
+
+  if (
+    WiFi.status() == WL_CONNECTED
+  ) {
+
+    if (wifiConnecting) {
+
+      wifiConnecting = false;
+
+      Serial.println(
+        "WiFi connected!"
+      );
+
+      Serial.print(
+        "ESP32 IP: "
+      );
+
+      Serial.println(
+        WiFi.localIP()
+      );
+    }
+
+    return;
+  }
+
+
+  // ---------------------------------------------------
+  // Connection attempt in progress
+  // ---------------------------------------------------
+
+  if (wifiConnecting) {
+
+    // IMPORTANT:
+    // Never wait/block here.
+    // Sensor loop continues running.
+
+    if (
+      millis() -
+      wifiAttemptStartTime >=
+      WIFI_ATTEMPT_TIMEOUT
+    ) {
+
+      wifiConnecting = false;
+
+      Serial.println(
+        "WiFi connection attempt timed out."
+      );
+
+      Serial.println(
+        "Local buzzer/LED fail-safe remains active."
+      );
+
+      WiFi.disconnect();
+    }
+
+    return;
+  }
+
+
+  // ---------------------------------------------------
+  // Start next retry
+  // ---------------------------------------------------
+
+  if (
+    millis() -
+    lastWiFiRetryTime >=
+    WIFI_RETRY_INTERVAL
+  ) {
+
+    lastWiFiRetryTime =
+      millis();
+
+    Serial.println(
+      "WiFi disconnected. Retrying..."
+    );
+
+    startWiFiConnection();
+  }
+}
+
+
+// =====================================================
 //                       SETUP
 // =====================================================
 
 void setup() {
 
-  Serial.begin(115200);
+  Serial.begin(
+    115200
+  );
+
   delay(1000);
 
+
   Serial.println();
-  Serial.println("=================================");
-  Serial.println("     GIRI RAKSHAK ESP32");
-  Serial.println("=================================");
+  Serial.println(
+    "================================="
+  );
+
+  Serial.println(
+    "       GIRI RAKSHAK ESP32"
+  );
+
+  Serial.println(
+    "================================="
+  );
 
 
   // ---------------------------------------------------
   // Pins
   // ---------------------------------------------------
 
-  pinMode(LED_PIN, OUTPUT);
-  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(
+    LED_PIN,
+    OUTPUT
+  );
 
-  digitalWrite(LED_PIN, LOW);
-  digitalWrite(BUZZER_PIN, LOW);
+  pinMode(
+    BUZZER_PIN,
+    OUTPUT
+  );
+
+  digitalWrite(
+    LED_PIN,
+    LOW
+  );
+
+  digitalWrite(
+    BUZZER_PIN,
+    LOW
+  );
 
 
   // ---------------------------------------------------
   // Start I2C
   // ---------------------------------------------------
 
-  Wire.begin(SDA_PIN, SCL_PIN);
+  Wire.begin(
+    SDA_PIN,
+    SCL_PIN
+  );
 
-  Serial.println("I2C started.");
+  Serial.println(
+    "I2C started."
+  );
 
 
   // ---------------------------------------------------
-  // Wake up MPU6500
+  // Wake MPU6500
   // ---------------------------------------------------
 
-  Wire.beginTransmission(MPU_ADDR);
+  Wire.beginTransmission(
+    MPU_ADDR
+  );
 
   Wire.write(0x6B);
+
   Wire.write(0x00);
 
-  byte result = Wire.endTransmission();
+  byte result =
+    Wire.endTransmission();
 
-  if (result == 0) {
 
-    Serial.println("MPU6500 found at 0x68.");
+  if (
+    result == 0
+  ) {
+
+    Serial.println(
+      "MPU6500 found at 0x68."
+    );
 
   } else {
 
-    Serial.println("ERROR: MPU6500 not found!");
+    Serial.println(
+      "ERROR: MPU6500 not found!"
+    );
 
-    Serial.print("I2C error code: ");
-    Serial.println(result);
+    Serial.print(
+      "I2C error code: "
+    );
+
+    Serial.println(
+      result
+    );
   }
 
 
@@ -187,89 +371,88 @@ void setup() {
   // Check WHO_AM_I
   // ---------------------------------------------------
 
-  Wire.beginTransmission(MPU_ADDR);
+  Wire.beginTransmission(
+    MPU_ADDR
+  );
 
   Wire.write(0x75);
 
-  Wire.endTransmission(false);
+  Wire.endTransmission(
+    false
+  );
 
-  Wire.requestFrom(MPU_ADDR, 1);
+  Wire.requestFrom(
+    MPU_ADDR,
+    1
+  );
 
-  if (Wire.available()) {
 
-    byte whoAmI = Wire.read();
+  if (
+    Wire.available()
+  ) {
 
-    Serial.print("WHO_AM_I = 0x");
-    Serial.println(whoAmI, HEX);
+    byte whoAmI =
+      Wire.read();
 
-    if (whoAmI == 0x70) {
+    Serial.print(
+      "WHO_AM_I = 0x"
+    );
 
-      Serial.println("Confirmed: MPU6500");
+    Serial.println(
+      whoAmI,
+      HEX
+    );
+
+
+    if (
+      whoAmI == 0x70
+    ) {
+
+      Serial.println(
+        "Confirmed: MPU6500"
+      );
 
     } else {
 
-      Serial.println("WARNING: Unexpected MPU ID.");
+      Serial.println(
+        "WARNING: Unexpected MPU ID."
+      );
     }
   }
 
 
   // ---------------------------------------------------
-  // Configure accelerometer
-  // ±2g
+  // Accelerometer ±2g
   // ---------------------------------------------------
 
-  Wire.beginTransmission(MPU_ADDR);
+  Wire.beginTransmission(
+    MPU_ADDR
+  );
 
   Wire.write(0x1C);
+
   Wire.write(0x00);
 
   Wire.endTransmission();
 
-  Serial.println("MPU6500 ready.");
+
+  Serial.println(
+    "MPU6500 ready."
+  );
 
 
   // ---------------------------------------------------
-  // Connect to WiFi
+  // Start Wi-Fi in background
   // ---------------------------------------------------
 
-  Serial.println();
-  Serial.println("Connecting to WiFi...");
-
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  unsigned long wifiStart = millis();
-
-  while (
-    WiFi.status() != WL_CONNECTED &&
-    millis() - wifiStart < 10000
-  ) {
-
-    delay(250);
-
-    Serial.print(".");
-  }
-
-  Serial.println();
-
-  if (WiFi.status() == WL_CONNECTED) {
-
-    Serial.println("WiFi connected!");
-
-    Serial.print("ESP32 IP: ");
-    Serial.println(WiFi.localIP());
-
-  } else {
-
-    Serial.println("WiFi not connected.");
-    Serial.println("Local alarms will still work.");
-  }
+  startWiFiConnection();
 
 
   // ---------------------------------------------------
-  // Configure time using NTP
+  // Configure time
   // ---------------------------------------------------
 
-  // IST = UTC + 5:30 = 19800 seconds
+  // IST = UTC + 5:30.
   configTime(
     19800,
     0,
@@ -277,22 +460,79 @@ void setup() {
     "time.nist.gov"
   );
 
-  Serial.println("Time synchronization started.");
+  Serial.println(
+    "Time synchronization started."
+  );
+
+
+  // ---------------------------------------------------
+  // System information
+  // ---------------------------------------------------
+
+  Serial.println();
+
+  Serial.println(
+    "================================="
+  );
+
+  Serial.println(
+    "          SYSTEM READY"
+  );
+
+  Serial.println(
+    "================================="
+  );
+
+  Serial.println();
+
+
+  Serial.print(
+    "Node ID   : "
+  );
+
+  Serial.println(
+    SENSOR_ID
+  );
+
+
+  Serial.println(
+    "Location  : Aizawl demonstration node"
+  );
+
+
+  Serial.println(
+    "Alarm conditions:"
+  );
+
+  Serial.println(
+    "Tilt     : > 15 degrees"
+  );
+
+  Serial.println(
+    "Moisture : > 80 percent"
+  );
+
+  Serial.println();
+
+
+  Serial.print(
+    "Backend: "
+  );
+
+  Serial.println(
+    BACKEND_URL
+  );
 
 
   Serial.println();
-  Serial.println("=================================");
-  Serial.println("          SYSTEM READY");
-  Serial.println("=================================");
-  Serial.println();
 
-  Serial.println("Alarm conditions:");
-  Serial.println("Tilt     : > 15 degrees");
-  Serial.println("Moisture : > 80 percent");
-  Serial.println();
+  Serial.println(
+    "Fail-safe mode: ACTIVE"
+  );
 
-  Serial.print("Backend: ");
-  Serial.println(BACKEND_URL);
+  Serial.println(
+    "Buzzer/LED do not depend on WiFi."
+  );
 }
 
 
@@ -302,75 +542,99 @@ void setup() {
 
 void readMPU() {
 
-  // Tell MPU6500 that we want accelerometer data
-  Wire.beginTransmission(MPU_ADDR);
+  Wire.beginTransmission(
+    MPU_ADDR
+  );
 
   Wire.write(0x3B);
 
-  Wire.endTransmission(false);
-
-  // Request 6 bytes:
-  // X high + X low
-  // Y high + Y low
-  // Z high + Z low
-  Wire.requestFrom(MPU_ADDR, 6);
-
-  if (Wire.available() == 6) {
-
-    int16_t ax =
-      (Wire.read() << 8) | Wire.read();
-
-    int16_t ay =
-      (Wire.read() << 8) | Wire.read();
-
-    int16_t az =
-      (Wire.read() << 8) | Wire.read();
+  Wire.endTransmission(
+    false
+  );
 
 
-    // ±2g = 16384 LSB/g
-    accelX = ax / 16384.0;
-    accelY = ay / 16384.0;
-    accelZ = az / 16384.0;
+  Wire.requestFrom(
+    MPU_ADDR,
+    6
+  );
 
 
-    // -------------------------------------------------
-    // Calculate roll
-    // -------------------------------------------------
+  if (
+    Wire.available() != 6
+  ) {
 
-    roll =
-      atan2(accelY, accelZ)
-      * 180.0 / PI;
+    Serial.println(
+      "ERROR: MPU data unavailable."
+    );
 
-
-    // -------------------------------------------------
-    // Calculate pitch
-    // -------------------------------------------------
-
-    pitch =
-      atan2(
-        -accelX,
-        sqrt(
-          accelY * accelY +
-          accelZ * accelZ
-        )
-      )
-      * 180.0 / PI;
-
-
-    // -------------------------------------------------
-    // Apply calibration
-    // -------------------------------------------------
-
-    correctedRoll =
-      roll - ROLL_OFFSET;
-
-    correctedPitch =
-      pitch - PITCH_OFFSET;
-
-  } else {
-
-    Serial.println("ERROR: MPU data unavailable.");
+    return;
   }
+
+
+  int16_t ax =
+    (Wire.read() << 8) |
+    Wire.read();
+
+  int16_t ay =
+    (Wire.read() << 8) |
+    Wire.read();
+
+  int16_t az =
+    (Wire.read() << 8) |
+    Wire.read();
+
+
+  // ±2g = 16384 LSB/g.
+  accelX =
+    ax / 16384.0;
+
+  accelY =
+    ay / 16384.0;
+
+  accelZ =
+    az / 16384.0;
+
+
+  // ---------------------------------------------------
+  // Roll
+  // ---------------------------------------------------
+
+  roll =
+    atan2(
+      accelY,
+      accelZ
+    ) *
+    180.0 /
+    PI;
+
+
+  // ---------------------------------------------------
+  // Pitch
+  // ---------------------------------------------------
+
+  pitch =
+    atan2(
+      -accelX,
+      sqrt(
+        accelY * accelY +
+        accelZ * accelZ
+      )
+    ) *
+    180.0 /
+    PI;
+
+
+  // ---------------------------------------------------
+  // Apply calibration
+  // ---------------------------------------------------
+
+  correctedRoll =
+    roll -
+    ROLL_OFFSET;
+
+  correctedPitch =
+    pitch -
+    PITCH_OFFSET;
 }
 
 
@@ -380,63 +644,73 @@ void readMPU() {
 
 void readMoisture() {
 
-  // Read analog value from soil sensor
   int rawValue =
-    analogRead(SOIL_SENSOR_PIN);
+    analogRead(
+      SOIL_SENSOR_PIN
+    );
 
 
-  // Convert raw value to percentage
+  // Convert ADC reading to percentage.
   //
-  // DRY_VALUE  = 3000
-  // WET_VALUE  = 1300
-  //
-  // Higher percentage = wetter soil
+  // DRY_VALUE = 3000
+  // WET_VALUE = 1300
 
   moisturePercent =
     (
-      (float)(DRY_VALUE - rawValue)
+      (
+        float
+      )(
+        DRY_VALUE -
+        rawValue
+      )
       /
-      (DRY_VALUE - WET_VALUE)
-    ) * 100.0;
+      (
+        DRY_VALUE -
+        WET_VALUE
+      )
+    ) *
+    100.0;
 
 
-  // Keep percentage between 0 and 100
-
+  // Keep 0–100%.
   moisturePercent =
     constrain(
       moisturePercent,
-      0,
-      100
+      0.0,
+      100.0
     );
 }
 
 
 // =====================================================
-//                    CHECK ALERTS
+//                    FAIL-SAFE ALERT
 // =====================================================
 
 void checkAlerts() {
 
   // ---------------------------------------------------
-  // Tilt alarm
+  // Tilt threshold
   // ---------------------------------------------------
 
   tiltAlert =
-    (
-      fabs(correctedRoll) > TILT_THRESHOLD
-    )
+    fabs(
+      correctedRoll
+    ) >
+    TILT_THRESHOLD
     ||
-    (
-      fabs(correctedPitch) > TILT_THRESHOLD
-    );
+    fabs(
+      correctedPitch
+    ) >
+    TILT_THRESHOLD;
 
 
   // ---------------------------------------------------
-  // Moisture alarm
+  // Moisture threshold
   // ---------------------------------------------------
 
   moistureAlert =
-    moisturePercent > MOISTURE_THRESHOLD;
+    moisturePercent >
+    MOISTURE_THRESHOLD;
 
 
   // ---------------------------------------------------
@@ -444,34 +718,29 @@ void checkAlerts() {
   // ---------------------------------------------------
 
   alarmActive =
-    tiltAlert || moistureAlert;
+    tiltAlert ||
+    moistureAlert;
 
 
   // ---------------------------------------------------
   // LED
   // ---------------------------------------------------
 
-  if (alarmActive) {
-
-    digitalWrite(
-      LED_PIN,
-      HIGH
-    );
-
-  } else {
-
-    digitalWrite(
-      LED_PIN,
-      LOW
-    );
-  }
+  digitalWrite(
+    LED_PIN,
+    alarmActive
+      ? HIGH
+      : LOW
+  );
 
 
   // ---------------------------------------------------
-  // Passive buzzer
+  // Buzzer
   // ---------------------------------------------------
 
-  if (alarmActive) {
+  if (
+    alarmActive
+  ) {
 
     tone(
       BUZZER_PIN,
@@ -480,23 +749,31 @@ void checkAlerts() {
 
   } else {
 
-    noTone(BUZZER_PIN);
+    noTone(
+      BUZZER_PIN
+    );
   }
 }
 
 
 // =====================================================
-//                 GET TIMESTAMP
+//                    GET TIMESTAMP
 // =====================================================
 
 String getTimestamp() {
 
   struct tm timeinfo;
 
-  // Try to get current time
-  if (getLocalTime(&timeinfo, 1000)) {
+
+  if (
+    getLocalTime(
+      &timeinfo,
+      1000
+    )
+  ) {
 
     char timestamp[30];
+
 
     strftime(
       timestamp,
@@ -505,31 +782,28 @@ String getTimestamp() {
       &timeinfo
     );
 
-    return String(timestamp);
+
+    return String(
+      timestamp
+    );
   }
 
 
-  // If NTP time is not available,
-  // return a fallback timestamp.
-  //
-  // Normally this should not happen after WiFi
-  // and NTP synchronization.
-
+  // Fallback if NTP is not ready.
   return "2026-01-01T00:00:00";
 }
 
 
 // =====================================================
-//                 SEND DATA TO BACKEND
+//                SEND DATA TO BACKEND
 // =====================================================
 
 void sendSensorData() {
 
-  // ---------------------------------------------------
-  // Check WiFi
-  // ---------------------------------------------------
-
-  if (WiFi.status() != WL_CONNECTED) {
+  if (
+    WiFi.status() !=
+    WL_CONNECTED
+  ) {
 
     Serial.println(
       "WiFi not connected - data not sent."
@@ -539,17 +813,17 @@ void sendSensorData() {
   }
 
 
-  // ---------------------------------------------------
-  // Create HTTP client
-  // ---------------------------------------------------
-
   HTTPClient http;
 
-  // Short timeout so network problems don't hold
-  // the ESP32 for too long.
-  http.setTimeout(2000);
+  http.setTimeout(
+    3000
+  );
 
-  http.begin(BACKEND_URL);
+
+  http.begin(
+    BACKEND_URL
+  );
+
 
   http.addHeader(
     "Content-Type",
@@ -558,18 +832,22 @@ void sendSensorData() {
 
 
   // ---------------------------------------------------
-  // Calculate tilt value
+  // Calculate tilt
   // ---------------------------------------------------
 
   float tiltDegrees =
     max(
-      fabs(correctedRoll),
-      fabs(correctedPitch)
+      fabs(
+        correctedRoll
+      ),
+      fabs(
+        correctedPitch
+      )
     );
 
 
   // ---------------------------------------------------
-  // Get timestamp
+  // Timestamp
   // ---------------------------------------------------
 
   String timestamp =
@@ -577,84 +855,179 @@ void sendSensorData() {
 
 
   // ---------------------------------------------------
-  // Create JSON
+  // JSON
   // ---------------------------------------------------
 
-  String json = "{";
+  String json =
+    "{";
 
-  json += "\"sensor_id\":\"ESP32_01\",";
 
-  json += "\"lat\":";
-  json += String(LATITUDE, 6);
-  json += ",";
+  json +=
+    "\"sensor_id\":\"";
 
-  json += "\"lon\":";
-  json += String(LONGITUDE, 6);
-  json += ",";
+  json +=
+    SENSOR_ID;
 
-  json += "\"tilt_deg\":";
-  json += String(tiltDegrees, 2);
-  json += ",";
+  json +=
+    "\",";
 
-  json += "\"moisture_pct\":";
-  json += String(moisturePercent, 1);
-  json += ",";
 
-  // No displacement sensor is currently connected,
-  // so we send 0.0 for now.
-  json += "\"displacement_cm\":0.0,";
+  json +=
+    "\"lat\":";
 
-  json += "\"timestamp\":\"";
-  json += timestamp;
-  json += "\"";
+  json +=
+    String(
+      LATITUDE,
+      6
+    );
 
-  json += "}";
+  json +=
+    ",";
+
+
+  json +=
+    "\"lon\":";
+
+  json +=
+    String(
+      LONGITUDE,
+      6
+    );
+
+  json +=
+    ",";
+
+
+  json +=
+    "\"tilt_deg\":";
+
+  json +=
+    String(
+      tiltDegrees,
+      2
+    );
+
+  json +=
+    ",";
+
+
+  json +=
+    "\"moisture_pct\":";
+
+  json +=
+    String(
+      moisturePercent,
+      1
+    );
+
+  json +=
+    ",";
+
+
+  // No displacement sensor connected.
+  json +=
+    "\"displacement_cm\":0.0,";
+
+
+  json +=
+    "\"timestamp\":\"";
+
+  json +=
+    timestamp;
+
+  json +=
+    "\"";
+
+
+  json +=
+    "}";
 
 
   // ---------------------------------------------------
-  // Print JSON for debugging
+  // Debug output
   // ---------------------------------------------------
 
   Serial.println();
-  Serial.println("===== SENDING JSON =====");
-  Serial.println(json);
-  Serial.println("========================");
+
+  Serial.println(
+    "===== SENDING JSON ====="
+  );
+
+  Serial.println(
+    json
+  );
+
+  Serial.println(
+    "========================"
+  );
 
 
   // ---------------------------------------------------
-  // Send POST request
+  // POST
   // ---------------------------------------------------
 
   int responseCode =
-    http.POST(json);
+    http.POST(
+      json
+    );
+
+
+  Serial.print(
+    "HTTP Response Code: "
+  );
+
+  Serial.println(
+    responseCode
+  );
 
 
   // ---------------------------------------------------
-  // Check response
+  // Response
   // ---------------------------------------------------
 
-  Serial.print("HTTP Response Code: ");
-  Serial.println(responseCode);
-
-
-  if (responseCode > 0) {
+  if (
+    responseCode >= 200 &&
+    responseCode < 300
+  ) {
 
     String response =
       http.getString();
 
-    Serial.print("Backend Response: ");
-    Serial.println(response);
+
+    Serial.print(
+      "Backend Response: "
+    );
+
+    Serial.println(
+      response
+    );
 
   } else {
 
-    Serial.print("POST failed: ");
-    Serial.println(
-      http.errorToString(responseCode)
+    Serial.print(
+      "POST failed: "
     );
+
+
+    if (
+      responseCode > 0
+    ) {
+
+      Serial.println(
+        http.getString()
+      );
+
+    } else {
+
+      Serial.println(
+        http.errorToString(
+          responseCode
+        )
+      );
+    }
   }
 
 
-  // Close HTTP connection
   http.end();
 }
 
@@ -666,63 +1039,161 @@ void sendSensorData() {
 void printReadings() {
 
   Serial.println();
-  Serial.println("---------------------------------");
 
-  Serial.print("X        = ");
-  Serial.print(accelX, 2);
-  Serial.println(" g");
-
-  Serial.print("Y        = ");
-  Serial.print(accelY, 2);
-  Serial.println(" g");
-
-  Serial.print("Z        = ");
-  Serial.print(accelZ, 2);
-  Serial.println(" g");
-
-  Serial.print("Roll     = ");
-  Serial.print(correctedRoll, 1);
-  Serial.println(" deg");
-
-  Serial.print("Pitch    = ");
-  Serial.print(correctedPitch, 1);
-  Serial.println(" deg");
-
-  Serial.print("Moisture = ");
-  Serial.print(moisturePercent, 1);
-  Serial.println(" %");
-
-  Serial.print("Tilt Alert     = ");
   Serial.println(
-    tiltAlert ? "YES" : "NO"
+    "---------------------------------"
   );
 
-  Serial.print("Moisture Alert = ");
-  Serial.println(
-    moistureAlert ? "YES" : "NO"
+
+  Serial.print(
+    "X        = "
   );
 
-  Serial.print("Alarm          = ");
-  Serial.println(
-    alarmActive ? "ON" : "OFF"
+  Serial.print(
+    accelX,
+    2
   );
 
-  Serial.println("---------------------------------");
+  Serial.println(
+    " g"
+  );
+
+
+  Serial.print(
+    "Y        = "
+  );
+
+  Serial.print(
+    accelY,
+    2
+  );
+
+  Serial.println(
+    " g"
+  );
+
+
+  Serial.print(
+    "Z        = "
+  );
+
+  Serial.print(
+    accelZ,
+    2
+  );
+
+  Serial.println(
+    " g"
+  );
+
+
+  Serial.print(
+    "Roll     = "
+  );
+
+  Serial.print(
+    correctedRoll,
+    1
+  );
+
+  Serial.println(
+    " deg"
+  );
+
+
+  Serial.print(
+    "Pitch    = "
+  );
+
+  Serial.print(
+    correctedPitch,
+    1
+  );
+
+  Serial.println(
+    " deg"
+  );
+
+
+  Serial.print(
+    "Moisture = "
+  );
+
+  Serial.print(
+    moisturePercent,
+    1
+  );
+
+  Serial.println(
+    " %"
+  );
+
+
+  Serial.print(
+    "Tilt Alert     = "
+  );
+
+  Serial.println(
+    tiltAlert
+      ? "YES"
+      : "NO"
+  );
+
+
+  Serial.print(
+    "Moisture Alert = "
+  );
+
+  Serial.println(
+    moistureAlert
+      ? "YES"
+      : "NO"
+  );
+
+
+  Serial.print(
+    "Alarm          = "
+  );
+
+  Serial.println(
+    alarmActive
+      ? "ON"
+      : "OFF"
+  );
+
+
+  Serial.print(
+    "WiFi           = "
+  );
+
+  Serial.println(
+    WiFi.status() ==
+      WL_CONNECTED
+      ? "CONNECTED"
+      : "OFFLINE"
+  );
+
+
+  Serial.println(
+    "---------------------------------"
+  );
 }
 
 
 // =====================================================
-//                      LOOP
+//                        LOOP
 // =====================================================
 
 void loop() {
 
   // ===================================================
-  // IMPORTANT:
-  // Sensors are read continuously.
+  // IMPORTANT FAIL-SAFE ORDER
   //
-  // This means the LED and buzzer do NOT wait for
-  // WiFi or the 5-second POST interval.
+  // Sensors and local alarm are processed FIRST.
+  // WiFi is maintained separately afterwards.
+  //
+  // Therefore:
+  // WiFi OFF ≠ sensors OFF
   // ===================================================
 
   readMPU();
@@ -733,33 +1204,47 @@ void loop() {
 
 
   // ---------------------------------------------------
-  // Print sensor readings every 1 second
+  // Print readings every 1 second
   // ---------------------------------------------------
 
   if (
-    millis() - lastPrintTime >= PRINT_INTERVAL
+    millis() -
+    lastPrintTime >=
+    PRINT_INTERVAL
   ) {
 
-    lastPrintTime = millis();
+    lastPrintTime =
+      millis();
 
     printReadings();
   }
 
 
   // ---------------------------------------------------
-  // Send sensor data to backend every 5 seconds
+  // Maintain WiFi in background
+  // ---------------------------------------------------
+
+  maintainWiFi();
+
+
+  // ---------------------------------------------------
+  // Send data every 5 seconds
   // ---------------------------------------------------
 
   if (
-    millis() - lastSendTime >= SEND_INTERVAL
+    millis() -
+    lastSendTime >=
+    SEND_INTERVAL
   ) {
 
-    lastSendTime = millis();
+    lastSendTime =
+      millis();
 
     sendSensorData();
   }
 
 
-  // Small delay
+  // Small loop delay.
+  // Keeps the ESP32 responsive.
   delay(20);
 }

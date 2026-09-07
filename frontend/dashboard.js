@@ -472,12 +472,14 @@ async function syncAllRegionalLiveFeeds() {
 // ===========================================
 // BACKEND ML RISK DATA
 // ===========================================
+let backendRiskZones = [];
+
 async function loadBackendRiskZones() {
   const API_BASE =
     (window.location.hostname === 'localhost' ||
      window.location.hostname === '127.0.0.1')
-      ? 'http://localhost:8000'
-      : 'https://girirakshak-api.onrender.com';
+      ? 'http://127.0.0.1:8000'
+      : 'https://YOUR-ACTUAL-RENDER-URL.onrender.com';
 
   try {
     const response = await fetch(`${API_BASE}/api/risk-zones`);
@@ -488,14 +490,194 @@ async function loadBackendRiskZones() {
 
     const zones = await response.json();
 
-    console.log("Backend ML Risk Zones:", zones);
+    backendRiskZones = Array.isArray(zones) ? zones : [];
 
-    return zones;
+    console.log('REAL BACKEND ML RISK ZONES:', backendRiskZones);
+
+    renderBackendRiskZones(backendRiskZones);
+
+    return backendRiskZones;
   } catch (error) {
-    console.error("Failed to load backend risk zones:", error);
+    console.error('Failed to load backend risk zones:', error);
+    backendRiskZones = [];
     return [];
   }
 }
+
+
+// =====================================================
+// LIVE ESP32 TELEMETRY
+// =====================================================
+
+let latestSensorReading = null;
+let selectedBackendZoneId = null;
+let telemetryViewMode = 'overview';
+
+function getApiBase() {
+  return (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  )
+    ? 'http://127.0.0.1:8000'
+    : 'https://YOUR-ACTUAL-RENDER-URL.onrender.com';
+}
+
+async function loadLatestSensorTelemetryForZone(zoneId) {
+  try {
+    const response = await fetch(
+      `${getApiBase()}/api/sensor-data/latest/${encodeURIComponent(zoneId)}`,
+      { cache: 'no-store' }
+    );
+
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.status !== 'ok' || !data.reading) {
+      console.warn(`No sensor telemetry for ${zoneId}`);
+      return;
+    }
+
+    // Ignore stale response if user clicked another zone meanwhile.
+    if (selectedBackendZoneId !== zoneId) {
+      return;
+    }
+
+    const reading = data.reading;
+
+    const tilt = Number(reading.tilt_deg);
+    const moisture = Number(reading.moisture_pct);
+
+    document.getElementById('telemetry-card-title').innerText =
+      `${zoneId} — Sensor Telemetry`;
+
+    document.getElementById('telemetry-source-desc').innerText =
+      `Data Source: Sensor Simulation / ESP32 Pipeline • Updated ${formatSensorTime(reading.timestamp)}`;
+
+    document.getElementById('hardware-badge').className = 'badge blue';
+    document.getElementById('hardware-badge').innerText = 'SENSOR DATA';
+
+    document.getElementById('val-tilt').innerText =
+      Number.isFinite(tilt) ? `${tilt.toFixed(1)}°` : '—';
+
+    document.getElementById('val-moisture').innerText =
+      Number.isFinite(moisture) ? `${moisture.toFixed(1)}%` : '—';
+
+    // No rainfall sensor in the simulator payload.
+    document.getElementById('val-rain').innerText = '—';
+
+    if (
+      telemetryChart &&
+      telemetryChart.data &&
+      telemetryChart.data.datasets.length >= 2
+    ) {
+      const tiltData = telemetryChart.data.datasets[0].data;
+      const moistureData = telemetryChart.data.datasets[1].data;
+
+      tiltData.fill(tilt);
+      moistureData.fill(moisture);
+
+      telemetryChart.update('none');
+    }
+
+    console.log(
+      `ZONE SENSOR TELEMETRY [${zoneId}]:`,
+      reading
+    );
+
+  } catch (error) {
+    console.warn(
+      `Failed to load telemetry for ${zoneId}:`,
+      error
+    );
+  }
+}
+
+function formatSensorTime(timestamp) {
+  if (!timestamp) return 'time unavailable';
+
+  const date = new Date(timestamp);
+
+  if (Number.isNaN(date.getTime())) {
+    return timestamp;
+  }
+
+  return date.toLocaleString();
+}
+
+// =====================================================
+// TELEMETRY VIEW ROUTER
+// =====================================================
+// Overview / hardware view -> latest sensor reading.
+// Selected backend ML zone -> that zone's own sensor reading.
+async function refreshTelemetry() {
+  if (telemetryViewMode === 'ml-zone' && selectedBackendZoneId) {
+    await loadLatestSensorTelemetryForZone(selectedBackendZoneId);
+    return;
+  }
+
+  if (
+    telemetryViewMode === 'overview' ||
+    telemetryViewMode === 'hardware'
+  ) {
+    await loadLatestSensorTelemetry();
+  }
+}
+
+function renderBackendRiskZones(zones) {
+  console.log(`Rendering ${zones.length} real backend risk zones`);
+
+  zones.forEach(zone => {
+    const lat = Number(zone.lat);
+    const lon = Number(zone.lon);
+    const score = Number(zone.risk_score || 0);
+    const level = String(zone.risk_level || 'Unknown');
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      console.warn('Skipping invalid zone coordinates:', zone);
+      return;
+    }
+
+    const color = getHazardColor(score);
+
+    const marker = L.circleMarker([lat, lon], {
+      radius: score >= 80 ? 12 : score >= 60 ? 10 : 8,
+      color: '#ffffff',
+      weight: 2,
+      fillColor: color,
+      fillOpacity: 0.9
+    });
+
+    marker.bindTooltip(
+      `<b>${zone.zone_id}</b><br>` +
+      `Risk: ${score.toFixed(1)}%<br>` +
+      `Level: ${level.toUpperCase()}`
+    );
+
+    marker.bindPopup(
+      `<div style="min-width:190px;">` +
+      `<strong>${zone.zone_id}</strong><br>` +
+      `Risk Score: <strong>${score.toFixed(1)}%</strong><br>` +
+      `Risk Level: <strong>${level.toUpperCase()}</strong><br>` +
+      `<span style="font-size:11px;color:#64748b;">REAL BACKEND ML OUTPUT</span>` +
+      `</div>`
+    );
+
+    marker.on('click', () => {
+      updateBackendZoneView(zone);
+    });
+
+    zoneLayerGroup.addLayer(marker);
+  });
+
+  console.log(
+    `Real backend zones rendered: ${zones.length}`
+  );
+}
+
+
 // =========================================================================
 // 7. Dendritic Geological Ridge Heatmap
 // =========================================================================
@@ -602,21 +784,21 @@ function renderAllNEROverview() {
     }
 
     // Render Hazard Polygons
-    Object.keys(state.districts).forEach(distKey => {
-      const dist = state.districts[distKey];
-      dist.zones.forEach(zone => {
-        const color = getHazardColor(zone.riskScore);
-        const zonePoly = L.polygon(zone.polygon, {
-          color: color,
-          fillColor: color,
-          fillOpacity: 0.6,
-          weight: 2
-        });
-        zonePoly.bindTooltip(`<b>${dist.name} (${state.name})</b><br/>${zone.name}<br/>Risk: ${zone.riskScore}%`);
-        zonePoly.on('click', () => updateShapPanel(zone, dist.name));
-        zoneLayerGroup.addLayer(zonePoly);
-      });
-    });
+   // Object.keys(state.districts).forEach(distKey => {
+   //   const dist = state.districts[distKey];
+   //   dist.zones.forEach(zone => {
+   //     const color = getHazardColor(zone.riskScore);
+     //   const zonePoly = L.polygon(zone.polygon, {
+       //   color: color,
+         // fillColor: color,
+        //  fillOpacity: 0.6,
+        //  weight: 2
+       // });
+       // zonePoly.bindTooltip(`<b>${dist.name} (${state.name})</b><br/>${zone.name}<br/>Risk: ${zone.riskScore}%`);
+       // zonePoly.on('click', () => updateShapPanel(zone, dist.name));
+       // zoneLayerGroup.addLayer(zonePoly);
+     // });
+   // });
   });
 
   // ONLY 1 PHYSICAL ESP MARKER: Aizawl, Mizoram
@@ -655,9 +837,16 @@ function renderAllNEROverview() {
   loadSavedCitizenReports();
 
   resetOverviewSidebar();
+  
+  if (backendRiskZones.length > 0) {
+  renderBackendRiskZones(backendRiskZones);
+  }
 }
 
 function resetOverviewSidebar() {
+  selectedBackendZoneId = null;
+  telemetryViewMode = 'overview';
+
   document.getElementById('data-source-tag').innerText = "REGIONAL MODEL";
   document.getElementById('data-source-tag').classList.remove('hardware');
   document.getElementById('risk-badge').className = 'badge blue';
@@ -672,8 +861,62 @@ function resetOverviewSidebar() {
   document.getElementById('hardware-badge').innerText = 'MODEL DATA';
 }
 
+function updateBackendZoneView(zone) {
+  selectedBackendZoneId = zone.zone_id;
+  telemetryViewMode = 'ml-zone';
+
+  const score = Number(zone.risk_score || 0);
+  const level = String(zone.risk_level || 'unknown');
+
+  const sourceTag = document.getElementById('data-source-tag');
+  const hwBadge = document.getElementById('hardware-badge');
+  const cardTitle = document.getElementById('telemetry-card-title');
+  const sourceDesc = document.getElementById('telemetry-source-desc');
+
+  map.flyTo(
+    [Number(zone.lat), Number(zone.lon)],
+    11,
+    { duration: 1.2 }
+  );
+
+  sourceTag.innerText = 'LIVE ML BACKEND';
+  sourceTag.classList.remove('hardware');
+
+  cardTitle.innerText = `${zone.zone_id} — ML Risk Zone`;
+  sourceDesc.innerText =
+    'Data Source: FastAPI + Validated ML Fusion Pipeline';
+
+  hwBadge.className = 'badge blue';
+  hwBadge.innerText = 'BACKEND DATA';
+
+  // No fake hardware values.
+  document.getElementById('val-tilt').innerText = '—';
+  document.getElementById('val-moisture').innerText = '—';
+  document.getElementById('val-rain').innerText = '—';
+
+  const shapZone = {
+    name: zone.zone_id,
+    riskScore: score.toFixed(1),
+    riskLevel: level,
+    why:
+      'Risk score generated by the backend ML fusion pipeline. ' +
+      'The factors below are the model features with the strongest SHAP contribution.',
+    shap: (zone.top_factors || []).map(f => ({
+      factor: f.feature,
+      impact: Number(f.abs_shap || Math.abs(f.shap_value || 0)),
+      shap_value: Number(f.shap_value || 0),
+      direction: f.direction
+    }))
+  };
+
+  updateShapPanel(shapZone, zone.zone_id);
+  loadLatestSensorTelemetryForZone(zone.zone_id);
+}
+
 // 9. Update View on District Selection
 async function updateDistrictView(stateKey, distKey) {
+  selectedBackendZoneId = null;
+
   const state = nerData[stateKey];
   if (!state) return;
   const dist = state.districts[distKey];
@@ -682,6 +925,8 @@ async function updateDistrictView(stateKey, distKey) {
   map.flyTo(dist.center, dist.zoom, { duration: 1.2 });
 
   const isHardware = !!dist.isHardwareNode;
+  telemetryViewMode = isHardware ? 'hardware' : 'model';
+
   const sourceTag = document.getElementById('data-source-tag');
   const hwBadge = document.getElementById('hardware-badge');
   const cardTitle = document.getElementById('telemetry-card-title');
@@ -805,6 +1050,9 @@ function populateDistricts(selectedState) {
 }
 
 stateSelect.addEventListener('change', (e) => {
+  selectedBackendZoneId = null;
+  telemetryViewMode = 'overview';
+
   const selectedState = e.target.value;
   if (!selectedState) {
     districtSelect.innerHTML = '<option value="">-- Select District --</option>';
@@ -826,6 +1074,9 @@ districtSelect.addEventListener('change', (e) => {
 });
 
 document.getElementById('btn-reset-view').addEventListener('click', () => {
+  selectedBackendZoneId = null;
+  telemetryViewMode = 'overview';
+
   stateSelect.value = "";
   districtSelect.innerHTML = '<option value="">-- Select District --</option>';
   districtSelect.disabled = true;
@@ -1040,27 +1291,23 @@ document.addEventListener('click', (e) => {
 
 map.on('click dragstart', closeSearchSuggestions);
 
-// 15. Aizawl Stage Demo Real-Time Telemetry Ticker
-setInterval(() => {
-  if (stateSelect.value === 'mizoram' && districtSelect.value === 'aizawl') {
-    if (telemetryChart && telemetryChart.data.datasets.length > 0) {
-      const lastTilt = telemetryChart.data.datasets[0].data[5];
-      const nextTilt = Number((lastTilt + (Math.random() * 0.2 - 0.1)).toFixed(1));
-      
-      telemetryChart.data.datasets[0].data.shift();
-      telemetryChart.data.datasets[0].data.push(nextTilt);
-      document.getElementById('val-tilt').innerText = `${nextTilt}°`;
-
-      telemetryChart.update('none');
-    }
-  }
-}, 3000);
-
+// 15. Live ESP32 / Sensor Telemetry Polling
 // 16. Boot System & Fetch Live Feeds
 initChart();
 renderAllNEROverview();
+
 loadBackendRiskZones();
+
 syncAllRegionalLiveFeeds();
+
+// Load the correct telemetry source for the current view.
+refreshTelemetry();
+
+// Refresh every 3 seconds.
+// A selected ML zone keeps showing that zone's own sensor data.
+setInterval(() => {
+  refreshTelemetry();
+}, 3000);
 
 setTimeout(() => map.invalidateSize(), 200);
 window.addEventListener('resize', () => map.invalidateSize());

@@ -19,3 +19,8 @@ giri_rakshak.db
 uploads/
 # Pytest
 .pytest_cache/
+
+# Temporary frontend backups
+frontend/*.backup
+frontend/*.backup-*
+frontend/*.before-*

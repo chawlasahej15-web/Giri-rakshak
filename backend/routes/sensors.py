@@ -386,3 +386,72 @@ def receive_sensor_data(
 
 
     return response
+# ============================================================
+# LATEST SENSOR READING
+# ============================================================
+
+@router.get("/sensor-data/latest")
+def get_latest_sensor_data(
+    db: Session = Depends(get_db),
+):
+    reading = (
+        db.query(SensorReading)
+        .order_by(SensorReading.timestamp.desc())
+        .first()
+    )
+
+    if reading is None:
+        return {
+            "status": "no_data",
+            "reading": None,
+        }
+
+    return {
+        "status": "ok",
+        "reading": {
+            "id": reading.id,
+            "sensor_id": reading.sensor_id,
+            "lat": reading.lat,
+            "lon": reading.lon,
+            "tilt_deg": reading.tilt_deg,
+            "moisture_pct": reading.moisture_pct,
+            "displacement_cm": reading.displacement_cm,
+            "timestamp": reading.timestamp.isoformat(),
+        },
+    }
+# ============================================================
+# LATEST SENSOR READING FOR A SPECIFIC SENSOR / ZONE
+# ============================================================
+
+@router.get("/sensor-data/latest/{sensor_id}")
+def get_latest_sensor_data_for_zone(
+    sensor_id: str,
+    db: Session = Depends(get_db),
+):
+    reading = (
+        db.query(SensorReading)
+        .filter(SensorReading.sensor_id == sensor_id)
+        .order_by(SensorReading.timestamp.desc())
+        .first()
+    )
+
+    if reading is None:
+        return {
+            "status": "no_data",
+            "reading": None,
+            "sensor_id": sensor_id,
+        }
+
+    return {
+        "status": "ok",
+        "reading": {
+            "id": reading.id,
+            "sensor_id": reading.sensor_id,
+            "lat": reading.lat,
+            "lon": reading.lon,
+            "tilt_deg": reading.tilt_deg,
+            "moisture_pct": reading.moisture_pct,
+            "displacement_cm": reading.displacement_cm,
+            "timestamp": reading.timestamp.isoformat(),
+        },
+    }

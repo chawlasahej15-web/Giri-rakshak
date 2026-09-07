@@ -5,9 +5,20 @@ The simulator sends the exact payload expected by:
 
 POST /api/sensor-data
 
-Sensor values are used by the backend reactive safety layer.
+Design:
+- ML risk is generated independently from the demo rainfall/geospatial pipeline.
+- Sensor readings act as an independent local fail-safe layer.
+- Sensor thresholds are handled by the backend:
+    tilt > 15 degrees
+    moisture > 80 percent
 
-ML2 prediction uses rainfall features separately.
+This simulator deliberately creates different sensor scenarios
+across the 12 demo zones so the dashboard can demonstrate:
+
+1. ML low risk + physical sensor alert
+2. ML moderate/high risk + normal sensor
+3. ML high risk + sensor alert
+4. ML very high risk + sensor normal
 """
 
 from __future__ import annotations
@@ -53,28 +64,80 @@ DEFAULT_URL = (
 
 SCENARIOS = {
 
-    "normal": {
-        "tilt_deg": 5.0,
-        "moisture_pct": 45.0,
+    # --------------------------------------------------------
+    # Safe local conditions
+    # --------------------------------------------------------
+    "normal_low": {
+        "tilt_deg": 4.5,
+        "moisture_pct": 38.0,
+        "displacement_cm": 0.2,
+    },
+
+    # --------------------------------------------------------
+    # Normal but slightly elevated local conditions
+    # --------------------------------------------------------
+    "normal_moderate": {
+        "tilt_deg": 6.0,
+        "moisture_pct": 46.0,
         "displacement_cm": 0.5,
     },
 
-    "tilt_alert": {
+    # --------------------------------------------------------
+    # Independent tilt fail-safe
+    # Tilt crosses 15° threshold
+    # --------------------------------------------------------
+    "tilt_fail_safe": {
         "tilt_deg": 18.0,
-        "moisture_pct": 45.0,
-        "displacement_cm": 1.0,
+        "moisture_pct": 55.0,
+        "displacement_cm": 1.8,
     },
 
-    "moisture_alert": {
+    # --------------------------------------------------------
+    # Elevated moisture but below 80% threshold
+    # --------------------------------------------------------
+    "wet_watch": {
+        "tilt_deg": 8.0,
+        "moisture_pct": 68.0,
+        "displacement_cm": 0.9,
+    },
+
+    # --------------------------------------------------------
+    # Independent moisture fail-safe
+    # Moisture crosses 80% threshold
+    # --------------------------------------------------------
+    "moisture_fail_safe": {
         "tilt_deg": 7.0,
         "moisture_pct": 86.0,
         "displacement_cm": 1.5,
     },
 
-    "critical": {
+    # --------------------------------------------------------
+    # Both local sensor conditions abnormal
+    # --------------------------------------------------------
+    "critical_sensor": {
         "tilt_deg": 19.0,
         "moisture_pct": 88.0,
         "displacement_cm": 4.0,
+    },
+
+    # --------------------------------------------------------
+    # Borderline but below both reactive thresholds
+    # 14° < 15°
+    # 76% < 80%
+    # --------------------------------------------------------
+    "borderline": {
+        "tilt_deg": 14.0,
+        "moisture_pct": 76.0,
+        "displacement_cm": 2.0,
+    },
+
+    # --------------------------------------------------------
+    # Elevated tilt but still below reactive threshold
+    # --------------------------------------------------------
+    "elevated_tilt": {
+        "tilt_deg": 11.0,
+        "moisture_pct": 72.0,
+        "displacement_cm": 1.2,
     },
 }
 
@@ -82,30 +145,101 @@ SCENARIOS = {
 # ============================================================
 # DEMO SCENARIO ASSIGNMENT
 # ============================================================
+#
+# The assignment is intentionally designed to demonstrate
+# ML risk and local sensor fail-safe as two independent layers.
+#
+# ------------------------------------------------------------
+#
+# DEMO_ZONE_01
+# ML: LOW
+# Sensor: ALERT
+# -> Fail-safe catches abnormal physical tilt even though
+#    the regional ML model considers the zone low risk.
+#
+# DEMO_ZONE_02
+# ML: MODERATE
+# Sensor: NORMAL
+# -> Normal baseline.
+#
+# DEMO_ZONE_03
+# ML: HIGH
+# Sensor: ALERT
+# -> ML and physical sensor agree.
+#
+# DEMO_ZONE_04
+# ML: HIGH
+# Sensor: NORMAL
+# -> Model warns, but the local node has not crossed
+#    a physical safety threshold.
+#
+# DEMO_ZONE_05
+# ML: MODERATE
+# Sensor: CRITICAL
+# -> Strong fail-safe case.
+#
+# DEMO_ZONE_06
+# ML: MODERATE
+# Sensor: NORMAL / wet-watch.
+#
+# DEMO_ZONE_07
+# ML: HIGH
+# Sensor: BORDERLINE
+# -> Elevated values but still below reactive thresholds.
+#
+# DEMO_ZONE_08
+# ML: VERY HIGH
+# Sensor: MOISTURE ALERT
+# -> Regional model and physical moisture warning agree.
+#
+# DEMO_ZONE_09
+# ML: HIGH
+# Sensor: ELEVATED TILT
+# -> Model warning with elevated local condition.
+#
+# DEMO_ZONE_10
+# ML: HIGH
+# Sensor: TILT ALERT
+# -> Physical tilt confirms concern.
+#
+# DEMO_ZONE_11
+# ML: HIGH
+# Sensor: BORDERLINE
+# -> Near threshold but no reactive trigger.
+#
+# DEMO_ZONE_12
+# ML: VERY HIGH
+# Sensor: NORMAL
+# -> Strong example where the regional model warns while
+#    local sensors are currently normal.
+#
+# ============================================================
 
 ZONE_SCENARIOS = {
-    "DEMO_ZONE_01": "normal",
-    "DEMO_ZONE_02": "normal",
 
-    "DEMO_ZONE_03": "tilt_alert",
+    "DEMO_ZONE_01": "tilt_fail_safe",
 
-    "DEMO_ZONE_04": "normal",
+    "DEMO_ZONE_02": "normal_moderate",
 
-    "DEMO_ZONE_05": "critical",
+    "DEMO_ZONE_03": "tilt_fail_safe",
 
-    "DEMO_ZONE_06": "normal",
+    "DEMO_ZONE_04": "normal_low",
 
-    "DEMO_ZONE_07": "normal",
+    "DEMO_ZONE_05": "critical_sensor",
 
-    "DEMO_ZONE_08": "moisture_alert",
+    "DEMO_ZONE_06": "wet_watch",
 
-    "DEMO_ZONE_09": "normal",
+    "DEMO_ZONE_07": "borderline",
 
-    "DEMO_ZONE_10": "tilt_alert",
+    "DEMO_ZONE_08": "moisture_fail_safe",
 
-    "DEMO_ZONE_11": "normal",
+    "DEMO_ZONE_09": "elevated_tilt",
 
-    "DEMO_ZONE_12": "critical",
+    "DEMO_ZONE_10": "tilt_fail_safe",
+
+    "DEMO_ZONE_11": "borderline",
+
+    "DEMO_ZONE_12": "normal_moderate",
 }
 
 
@@ -115,7 +249,7 @@ ZONE_SCENARIOS = {
 
 def load_demo_data():
     """
-    Load the six/twelve-zone demo files.
+    Load the 12-zone demo files.
     """
 
     if not DEMO_ZONES_FILE.exists():
@@ -208,7 +342,7 @@ def send_sensor_reading(
 
     payload = {
         "sensor_id":
-            zone["zone_id"],
+            str(zone["zone_id"]),
 
         "lat":
             float(zone["lat"]),
@@ -285,7 +419,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Validation
+    # Validation: exactly 12 zones
     # --------------------------------------------------------
 
     if len(zones) != 12:
@@ -301,6 +435,10 @@ def main():
         .tolist()
     )
 
+    # --------------------------------------------------------
+    # Validation: every zone has a sensor scenario
+    # --------------------------------------------------------
+
     missing_scenarios = [
         zone_id
         for zone_id in zone_ids
@@ -315,6 +453,10 @@ def main():
                 missing_scenarios
             )
         )
+
+    # --------------------------------------------------------
+    # Validation: every zone has rainfall scenario
+    # --------------------------------------------------------
 
     rainfall_zone_ids = set(
         rainfall["zone_id"]
@@ -336,16 +478,32 @@ def main():
             )
         )
 
-
     # --------------------------------------------------------
     # Header
     # --------------------------------------------------------
 
     print()
-    print("=" * 80)
-    print("GIRIRAKSHAK — 12 ZONE SENSOR DEMO")
-    print("=" * 80)
-
+    print("=" * 90)
+    print("GIRIRAKSHAK — 12 ZONE FAIL-SAFE SENSOR DEMO")
+    print("=" * 90)
+    print()
+    print(
+        "Sensor safety thresholds:"
+    )
+    print(
+        "  Tilt     > 15°"
+    )
+    print(
+        "  Moisture > 80%"
+    )
+    print()
+    print(
+        "ML risk and physical sensor safety are evaluated"
+    )
+    print(
+        "as independent layers."
+    )
+    print()
 
     # --------------------------------------------------------
     # Send all zones
@@ -371,7 +529,6 @@ def main():
             .iloc[0]
         )
 
-
         try:
 
             payload, result = (
@@ -382,19 +539,65 @@ def main():
                 )
             )
 
+            reactive = bool(
+                result.get(
+                    "reactive_alert_triggered",
+                    False
+                )
+            )
+
+            ml_generated = bool(
+                result.get(
+                    "ml_prediction_generated",
+                    False
+                )
+            )
+
+            # ------------------------------------------------
+            # Human-readable fail-safe explanation
+            # ------------------------------------------------
+
+            reasons = []
+
+            if (
+                payload["tilt_deg"] > 15.0
+            ):
+                reasons.append(
+                    "TILT"
+                )
+
+            if (
+                payload["moisture_pct"] > 80.0
+            ):
+                reasons.append(
+                    "MOISTURE"
+                )
+
+            if reasons:
+                sensor_status = (
+                    "ALERT:" +
+                    "+".join(reasons)
+                )
+            else:
+                sensor_status = "NORMAL"
+
+            expected_ml = str(
+                rainfall_row.get(
+                    "expected_risk_level",
+                    "N/A"
+                )
+            )
 
             print(
                 f"{zone_id:15s}"
                 f" | sensor={scenario:18s}"
                 f" | tilt={payload['tilt_deg']:5.1f}°"
                 f" | moisture={payload['moisture_pct']:5.1f}%"
-                f" | ML={rainfall_row.get('expected_risk_level', 'N/A'):9s}"
-                f" | reactive="
-                f"{result.get('reactive_alert_triggered')}"
-                f" | ml_generated="
-                f"{result.get('ml_prediction_generated')}"
+                f" | ML={expected_ml:9s}"
+                f" | sensor_status={sensor_status:14s}"
+                f" | reactive={str(reactive):5s}"
+                f" | ml_generated={str(ml_generated):5s}"
             )
-
 
         except requests.RequestException as exc:
 
@@ -404,7 +607,6 @@ def main():
                 f" | {exc}"
             )
 
-
         except Exception as exc:
 
             print(
@@ -413,7 +615,6 @@ def main():
                 f" | {exc}"
             )
 
-
         time.sleep(
             max(
                 args.interval,
@@ -421,11 +622,34 @@ def main():
             )
         )
 
+    # --------------------------------------------------------
+    # Footer
+    # --------------------------------------------------------
 
     print()
-    print("=" * 80)
+    print("=" * 90)
     print("SENSOR DEMO COMPLETE")
-    print("=" * 80)
+    print("=" * 90)
+    print()
+    print(
+        "Fail-safe examples:"
+    )
+    print(
+        "  DEMO_ZONE_01  -> ML LOW + sensor tilt alert"
+    )
+    print(
+        "  DEMO_ZONE_04  -> ML HIGH + sensor normal"
+    )
+    print(
+        "  DEMO_ZONE_03  -> ML HIGH + sensor tilt alert"
+    )
+    print(
+        "  DEMO_ZONE_08  -> ML VERY HIGH + moisture alert"
+    )
+    print(
+        "  DEMO_ZONE_12  -> ML VERY HIGH + sensor normal"
+    )
+    print()
 
 
 if __name__ == "__main__":

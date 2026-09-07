@@ -14,8 +14,7 @@ load_dotenv(dotenv_path=ENV_FILE)
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
-ALERT_RECIPIENT_PHONE = os.getenv("ALERT_RECIPIENT_PHONE")
-
+ALERT_RECIPIENT_PHONE = os.getenv("ALERT_PHONE_NUMBER")
 
 def twilio_configured() -> bool:
     return all(
@@ -70,7 +69,7 @@ def send_sms(
         )
 
         twilio_message = client.messages.create(
-            body=message,
+            body="sms_internal_alerts",
             from_=TWILIO_PHONE_NUMBER,
             to=phone_number,
         )

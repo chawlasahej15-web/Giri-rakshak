@@ -39,7 +39,7 @@ from models import (
 )
 
 from ml.src.predict import predict_risk
-
+from alerts.twilio_service import send_configured_alert
 
 router = APIRouter(
     prefix="/api",
@@ -174,20 +174,25 @@ def receive_sensor_data(
 
     if reactive_alert:
 
+        alert_message = (
+            "Giri-Rakshak CRITICAL ALERT: "
+            "Abnormal sensor threshold detected. "
+            f"Zone: {data.sensor_id}"
+        )
+
         alert = Alert(
             zone_id=data.sensor_id,
             risk_level="critical",
-            message=(
-                "Reactive alert: "
-                "abnormal sensor threshold detected."
-            ),
+            message=alert_message,
             timestamp=data.timestamp,
         )
 
-        db.add(
-            alert
-        )
+        db.add(alert)
 
+        # Send SMS alert
+        sms_result = send_configured_alert(alert_message)
+
+        print("Reactive SMS Result:", sms_result)
 
     # --------------------------------------------------------
     # 4. ML prediction

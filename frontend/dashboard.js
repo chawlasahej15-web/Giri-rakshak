@@ -3413,41 +3413,27 @@ async function fetchRecentAlerts() {
     : [];
 }
 
-function isReactiveSensorAlert(
-  alert
-) {
-
+function isReactiveSensorAlert(alert) {
   const message =
-    String(
-      alert?.message || ''
-    );
+    String(alert?.message || '');
 
   const level =
-    String(
-      alert?.risk_level || ''
-    ).toLowerCase();
+    String(alert?.risk_level || '')
+      .toLowerCase();
 
   const zoneId =
-    String(
-      alert?.zone_id || ''
-    );
+    String(alert?.zone_id || '');
 
-  // Only the actual physical ESP32 node
-  // should produce a LIVE SENSOR ALERT.
-  // The 12 simulated ML zones should not.
+  const isHardwareAlert =
+    /abnormal sensor threshold detected/i.test(message) ||
+    /reactive alert/i.test(message);
+
   return (
-    zoneId ===
-      'ESP32_01' &&
-
-    level ===
-      'critical' &&
-
-    /reactive alert/i.test(
-      message
-    )
+    zoneId === 'ESP32_01' &&
+    level === 'critical' &&
+    isHardwareAlert
   );
 }
-
 async function pollLiveSensorAlerts() {
 
   try {

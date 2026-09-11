@@ -1,13 +1,39 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from database import get_db
 from models import Alert
+from alerts.twilio_service import send_configured_alert
+
 
 router = APIRouter(
     prefix="/api",
     tags=["Alerts"]
 )
+
+
+class TriggerAlertRequest(BaseModel):
+    zone_id: str
+    risk_level: str
+    message: str
+
+
+@router.post("/trigger-alert")
+def trigger_alert(data: TriggerAlertRequest):
+    alert_message = (
+        f"Giri-Rakshak {data.risk_level.upper()} ALERT: "
+        f"{data.message} Zone: {data.zone_id}"
+    )
+
+    result = send_configured_alert(alert_message)
+
+    return {
+        "status": "sent",
+        "zone_id": data.zone_id,
+        "risk_level": data.risk_level,
+        "sms_result": result,
+    }
 
 
 @router.get("/alerts/recent")

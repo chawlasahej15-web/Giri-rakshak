@@ -2230,22 +2230,34 @@ document.getElementById(
 
 // This remains the existing demo/manual dispatch UI.
 // Actual automatic SMS integration is being handled separately.
-document.getElementById(
-  'btn-trigger-alert'
-).addEventListener(
-  'click',
-  () => {
+document.getElementById('btn-trigger-alert').addEventListener('click', async () => {
+  const lang = document.getElementById('lang-select').value;
 
-    const lang =
-      document.getElementById(
-        'lang-select'
-      ).value;
+  try {
+    const response = await fetch(`${getApiBase()}/api/trigger-alert`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        zone_id: 'ESP32_01',
+        risk_level: 'critical',
+        message: translations[lang]
+      })
+    });
 
-    alert(
-      `[SIH DEMO ACTION] Emergency Broadcast Transmitted via SMS & IVR:\n\n${translations[lang]}`
-    );
+    const result = await response.json();
+
+    if (!response.ok || !result.sms_result?.success) {
+      throw new Error(result.sms_result?.error || 'SMS failed');
+    }
+
+    alert('Emergency SMS transmitted successfully.');
+  } catch (error) {
+    console.error('Emergency SMS error:', error);
+    alert(`Emergency SMS failed: ${error.message}`);
   }
-);
+});
 
 // =========================================================================
 // 13. Citizen Field Incident Sync Engine (Listens to report.html)

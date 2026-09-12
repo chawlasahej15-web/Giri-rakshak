@@ -15,10 +15,10 @@ router = APIRouter(
 @router.get("/alerts/recent")
 def get_recent_alerts(
     limit: int = Query(default=20, ge=1, le=100),
-    current_user: User = Depends(require_roles("official")),
+
     db: Session = Depends(get_db),
 ):
-    del current_user
+    
     alerts = db.query(Alert).order_by(Alert.timestamp.desc()).limit(limit).all()
     return [
         {

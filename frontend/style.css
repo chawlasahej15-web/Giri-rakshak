@@ -13,37 +13,44 @@
   --sensor-purple: #7c3aed;
 }
 
-* {
+/* Universal Clean Reset (Fixed syntax error) */
+*, *::before, *::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-body {
+html, body {
+  width: 100%;
+  height: 100vh;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
   background-color: var(--bg-page);
   color: var(--text-main);
-  height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .hidden {
   display: none !important;
 }
 
-/* Header with Logo & Search Bar */
-.navbar {
-  height: 52px;
+/* Header Pinned Flush to the Top Edge */
+.navbar, header, .nav-container {
+  height: 54px;
+  width: 100%;
+  margin: 0 !important;
+  padding: 0 1.5rem !important;
   background: var(--panel-bg);
   border-bottom: 1px solid var(--panel-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 1.5rem;
   z-index: 1000;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
 }
 
 .logo-group {
@@ -52,9 +59,10 @@ body {
 }
 
 .brand-logo {
-  height: 42px;
+  height: 44px;
   width: auto;
   object-fit: contain;
+  display: block;
 }
 
 /* Global Nav Search Container */
@@ -205,14 +213,14 @@ body {
 .dashboard-grid {
   display: flex;
   flex: 1;
+  height: calc(100vh - 54px);
   overflow: hidden;
 }
 
 .map-container {
   flex: 1;
   position: relative;
-  height: calc(100vh - 52px);
-  min-height: 400px;
+  height: 100%;
 }
 
 #map {
@@ -297,6 +305,7 @@ body {
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
+  flex-shrink: 0;
 }
 
 .card {
@@ -305,6 +314,7 @@ body {
   border-radius: 10px;
   padding: 14px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  max-width: 100%;
 }
 
 .card-header {
@@ -432,14 +442,7 @@ body {
   transition: width 0.3s ease;
 }
 
-/* Dispatch Form */
-.dispatch-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 0.8rem;
-}
-
+/* Form Inputs */
 .custom-select, input, textarea {
   width: 100%;
   background: #ffffff;
@@ -463,16 +466,6 @@ body {
   cursor: not-allowed;
 }
 
-.alert-preview-box {
-  background: #eff6ff;
-  border-left: 3px solid #3b82f6;
-  padding: 8px 10px;
-  font-size: 0.76rem;
-  color: #1e40af;
-  font-style: italic;
-  border-radius: 4px;
-}
-
 /* Badges & Buttons */
 .badge {
   font-size: 0.65rem;
@@ -485,15 +478,6 @@ body {
 .badge.gray { background: #f1f5f9; color: #475569; }
 .badge.purple { background: #fdf4ff; color: #86198f; border: 1px solid #f0abfc; }
 
-.tag {
-  font-size: 0.72rem;
-  background: #f1f5f9;
-  padding: 3px 8px;
-  border-radius: 4px;
-  color: var(--accent-blue);
-  font-weight: 600;
-}
-
 .btn {
   padding: 8px 14px;
   border-radius: 6px;
@@ -503,14 +487,8 @@ body {
   font-size: 0.8rem;
   transition: all 0.2s;
 }
-.btn-outline { background: transparent; border: 1px solid var(--panel-border); color: var(--text-main); }
-.btn-outline:hover { background: #f1f5f9; }
 .btn-primary { background: var(--accent-blue); color: white; }
 .btn-primary:hover { background: var(--accent-blue-hover); }
-.btn-danger { background: #dc2626; color: white; }
-.btn-danger:hover { background: #b91c1c; }
-.btn-full { width: 100%; }
-.btn-sm { padding: 5px 10px; font-size: 0.74rem; }
 
 /* Map Legend */
 .map-legend {
@@ -528,79 +506,269 @@ body {
 }
 .map-legend h4 { margin-bottom: 6px; font-size: 0.78rem; font-weight: 700; }
 .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-weight: 500; }
-.legend-note { margin-top: 6px; font-size: 0.65rem; color: var(--text-dim); }
 .dot { width: 11px; height: 11px; border-radius: 50%; }
 .dot.watch { background: var(--hazard-watch); }
 .dot.high { background: var(--hazard-high); }
 .dot.very-high { background: var(--hazard-very-high); }
 .dot.extreme { background: var(--hazard-extreme); }
 .dot.sensor { background: var(--sensor-purple); border: 2px solid white; box-shadow: 0 0 4px rgba(0, 0, 0, 0.3); }
-.dot.citizen { background: var(--accent-blue); }
-
-/* Citizen Modal */
-
-.form-group { margin-bottom: 12px; }
-.form-group label { display: block; font-size: 0.74rem; font-weight: 600; margin-bottom: 4px; color: var(--text-dim); }
-
-/* Responsive */
-@media (max-width: 960px) {
-  .nav-search-container { flex: 0 1 220px; margin: 0 10px; }
-  .dashboard-grid { flex-direction: column; overflow-y: auto; }
-  .map-container { min-height: 55vh; }
-  .region-filter-card { top: 12px; left: 12px; width: 230px; padding: 10px; }
-  .sidebar { width: 100%; border-left: none; border-top: 1px solid var(--panel-border); }
+.dot.citizen {
+  background: var(--accent-blue, #0284c7);
+  border-radius: 3px;
+  width: 11px;
+  height: 11px;
+  display: inline-block;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
 }
 
-/* Citizen Modal File Input & Preview */
-.custom-file-input {
-  width: 100%;
-  padding: 6px;
-  font-size: 0.78rem;
-  background: #f8fafc;
-  border: 1px dashed var(--panel-border);
-  border-radius: 6px;
-  cursor: pointer;
+
+
+/* =========================================================================
+   RESPONSIVE LAYOUT ENGINE (Mobile & Tablet)
+   ========================================================================= */
+
+@media (max-width: 1024px) {
+  body {
+    overflow-y: auto;
+    height: auto;
+  }
+
+  .dashboard-grid {
+    flex-direction: column;
+    height: auto;
+    overflow: visible;
+  }
+
+  .map-container {
+    height: 52vh;
+    min-height: 380px;
+  }
+
+  .sidebar {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--panel-border);
+    height: auto;
+    max-height: none;
+    overflow-y: visible;
+  }
 }
 
-.image-preview-wrapper {
-  position: relative;
-  margin-top: 8px;
-  width: 100%;
-  max-height: 140px;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid var(--panel-border);
+@media (max-width: 768px) {
+  .navbar, header, .nav-container {
+    height: auto;
+    padding: 8px 12px !important;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .brand-logo {
+    height: 36px;
+  }
+
+  .nav-search-container {
+    order: 3;
+    flex: 1 1 100%;
+    margin: 4px 0 0 0;
+  }
+
+  .region-filter-card {
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    width: calc(100% - 24px);
+    padding: 12px;
+  }
+
+  .map-container {
+    height: 48vh;
+    min-height: 320px;
+  }
 }
 
-.image-preview-wrapper img {
-  width: 100%;
-  height: 130px;
-  object-fit: cover;
-  display: block;
+
+/* =========================================================================
+   MOBILE OVERLAP FIX (< 768px)
+   ========================================================================= */
+@media (max-width: 768px) {
+  /* 1. Give the map container enough vertical room on mobile */
+  .map-container {
+    height: 60vh !important;
+    min-height: 440px !important;
+    position: relative !important;
+  }
+
+  /* 2. Compact the filter card and pin it to the top */
+  .region-filter-card {
+    top: 8px !important;
+    left: 8px !important;
+    right: 8px !important;
+    width: auto !important;
+    padding: 8px 10px !important;
+    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.94) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+    z-index: 600 !important;
+  }
+
+  .filter-header {
+    margin-bottom: 6px !important;
+    padding-bottom: 4px !important;
+  }
+
+  .filter-controls {
+    gap: 6px !important;
+  }
+
+  .control-group label {
+    font-size: 0.65rem !important;
+    margin-bottom: 2px !important;
+  }
+
+  .custom-select {
+    padding: 5px 8px !important;
+    font-size: 0.75rem !important;
+    height: 32px !important;
+  }
+
+  /* 3. Collapse the legend into a compact, single-row pill pinned to the bottom */
+  .map-legend {
+    bottom: 8px !important;
+    left: 8px !important;
+    right: auto !important;
+    padding: 5px 8px !important;
+    font-size: 0.65rem !important;
+    max-width: calc(100% - 70px) !important;
+    border-radius: 6px !important;
+    background: rgba(255, 255, 255, 0.92) !important;
+    z-index: 500 !important;
+  }
+
+  .map-legend h4 {
+    display: none !important; /* Hide title on small phones */
+  }
+
+  .map-legend .legend-item {
+    margin-bottom: 2px !important;
+    font-size: 0.62rem !important;
+  }
+
+  .map-legend .legend-note {
+    display: none !important; /* Hide small notes to avoid height bloat */
+  }
+
+  /* 4. Ensure Leaflet zoom controls do not collide with legend */
+  .leaflet-bottom.leaflet-right .leaflet-control-zoom {
+    margin-bottom: 8px !important;
+    margin-right: 8px !important;
+  }
 }
 
-.btn-remove-preview {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  background: rgba(15, 23, 42, 0.75);
-  color: white;
-  border: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
+
+/* =========================================================================
+   DARK MODE SYSTEM
+   ========================================================================= */
+
+body.dark-mode {
+  --bg-page: #0b1329;
+  --panel-bg: #111c44;
+  --panel-border: #1e293b;
+  --text-main: #f8fafc;
+  --text-dim: #94a3b8;
 }
 
-/* Map Pin Popup styling with uploaded image */
-.leaflet-popup-content img.popup-incident-image {
-  width: 100%;
-  height: 110px;
-  object-fit: cover;
-  border-radius: 6px;
-  margin-top: 6px;
+/* Backgrounds & Text Overrides */
+body.dark-mode .sidebar,
+body.dark-mode .district-alert-box,
+body.dark-mode .stat-box {
+  background: #0b1329 !important;
+}
+
+body.dark-mode input,
+body.dark-mode select,
+body.dark-mode textarea,
+body.dark-mode #global-search-input {
+  background: #1b254b !important;
+  color: #f8fafc !important;
+  border-color: #2b3674 !important;
+}
+
+body.dark-mode .search-suggestions-dropdown,
+body.dark-mode .search-suggestion-item {
+  background: #111c44 !important;
+  color: #f8fafc !important;
+}
+
+body.dark-mode .search-suggestion-item:hover {
+  background: #1b254b !important;
+}
+
+body.dark-mode .region-filter-card,
+body.dark-mode .map-legend {
+  background: rgba(17, 28, 68, 0.94) !important;
+  color: #f8fafc !important;
+  border-color: #1e293b !important;
+}
+
+body.dark-mode .region-filter-card strong,
+body.dark-mode .map-legend h4 {
+  color: #f8fafc !important;
+}
+
+/* Subtly invert the Leaflet base tiles to create an authentic night map */
+body.dark-mode .leaflet-tile-pane {
+  filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.35);
+}
+
+/* Retain original colors for overlays, heatmaps, and markers */
+body.dark-mode .leaflet-overlay-pane,
+body.dark-mode .leaflet-marker-pane,
+body.dark-mode .leaflet-popup-pane {
+  filter: none !important;
+}
+
+/* Ensure Card & Heading stay high contrast in Dark Mode */
+body.dark-mode #official-alert-panel {
+  background: #111c44 !important;
+  border-color: #1e293b !important;
+}
+
+body.dark-mode #official-alert-panel h3 {
+  color: #f8fafc !important; /* Crisp white text */
+}
+
+/* Fix Input & Select boxes inside the broadcast card */
+body.dark-mode #official-alert-panel input,
+body.dark-mode #official-alert-panel select {
+  background: #1b254b !important;
+  color: #f8fafc !important;
+  border-color: #2b3674 !important;
+}
+
+/* Fix Placeholder text visibility */
+body.dark-mode #official-alert-panel input::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1;
+}
+
+/* Polish Emergency Dispatch badge for dark mode */
+body.dark-mode #official-alert-panel .source-tag {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+
+body.dark-mode #routes-avoid-card {
+  background: #111c44 !important;
+  border-color: #1e293b !important;
+}
+
+body.dark-mode #routes-avoid-card h3 {
+  color: #f8fafc !important;
+}
+
+body.dark-mode #avoid-routes-list > div {
+  background: #0b1329 !important;
+  border-color: #1e293b !important;
 }

@@ -1,56 +1,70 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>GiriRakshak | NER Landslide Early Warning System</title>
-  
-  <!-- Leaflet CSS -->
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <!-- Chart.js for real-time sensor graphs -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 </head>
+
 <body>
 
-  <!-- Top Command Bar -->
   <header class="navbar">
     <div class="logo-group">
       <img src="logo.png" alt="GiriRakshak Logo" class="brand-logo" />
     </div>
 
-    <!-- Search Input for Cities, Districts & States -->
     <div class="nav-search-container">
       <div class="search-input-wrapper">
         <span class="search-icon">🔍</span>
-        <input 
-          type="text" 
-          id="global-search-input" 
-          placeholder="Search NER city, district, or slope zone..." 
-          autocomplete="off"
-        />
+        <input type="text" id="global-search-input" placeholder="Search NER city, district, or slope zone..."
+          autocomplete="off" />
         <button id="search-clear-btn" class="search-clear-btn hidden">&times;</button>
       </div>
       <div id="search-suggestions" class="search-suggestions-dropdown hidden"></div>
     </div>
 
-    <div class="header-actions">
-      <a href="report.html" class="btn btn-outline" style="text-decoration: none;">📍 + Citizen Report</a>
-      <div class="system-status">
-        <span class="pulse-dot" id="status-dot"></span>
-        <span id="connection-status">NER REGIONAL: ONLINE</span>
+    <div class="header-actions" style="display: flex; align-items: center; gap: 12px;">
+
+      <button id="theme-toggle-btn" class="btn btn-outline"
+        style="padding: 5px 10px; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 5px;"
+        aria-label="Toggle Theme">
+        <span id="theme-icon">🌙</span>
+        <span id="theme-label">Dark</span>
+      </button>
+
+      <!-- Status Pill -->
+      <div class="system-status-pill"
+        style="display: inline-flex; align-items: center; gap: 8px; height: 36px; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.25); padding: 0 14px; border-radius: 20px; font-size: 12px; font-weight: 600; color: #15803d; white-space: nowrap;">
+        <span
+          style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%; box-shadow: 0 0 6px rgba(34, 197, 94, 0.8);"></span>
+        <span>NER Early Warning: Online</span>
       </div>
+
+      <!-- Citizen Report button -->
+      <a href="report.html" id="citizen-report-btn" class="action-btn"
+        style="display: none; height: 36px; line-height: 36px; background: #0284c7; color: #fff; padding: 0 16px; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: 600;">
+        + Citizen Report
+      </a>
+
+      <!-- Login / Logout Button -->
+      <button id="auth-action-btn" onclick="handleAuthAction()"
+        style="height: 36px; padding: 0 20px; background: #0284c7; border: none; color: #fff; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; transition: background 0.2s;">
+        Login
+      </button>
     </div>
   </header>
 
-  <!-- Main Dashboard Grid -->
   <main class="dashboard-grid">
-    
-    <!-- Map Centerpiece -->
+
     <section class="map-container">
       <div id="map"></div>
-      
-      <!-- Top-Left Region Filter Box (State / District Selector) -->
+
       <div class="region-filter-card">
         <div class="filter-header">
           <span class="filter-icon">🌐</span>
@@ -59,6 +73,7 @@
             <small id="current-forecast-date">Regional Model + Aizawl IoT Node</small>
           </div>
         </div>
+
         <div class="filter-controls">
           <div class="control-group">
             <label for="state-select">Select State</label>
@@ -74,6 +89,7 @@
               <option value="tripura">Tripura</option>
             </select>
           </div>
+
           <div class="control-group">
             <label for="district-select">Select District</label>
             <select id="district-select" class="custom-select" disabled>
@@ -84,102 +100,426 @@
         </div>
       </div>
 
-      <!-- Map Legend (Orange to Red Focused) -->
       <div class="map-legend">
         <h4>Landslide Hazard Scale</h4>
         <div class="legend-item"><span class="dot watch"></span> Moderate (Orange)</div>
         <div class="legend-item"><span class="dot high"></span> High Hazard (Deep Orange)</div>
         <div class="legend-item"><span class="dot very-high"></span> Very High (Red)</div>
         <div class="legend-item"><span class="dot extreme"></span> Critical / Immediate Risk (Dark Red)</div>
-        <hr/>
+        <hr />
         <div class="legend-item"><span class="dot sensor"></span> <b>Aizawl ESP32 Edge Station</b> (Demo Node)</div>
         <div class="legend-item"><span class="dot citizen"></span> Ground Incident Pin</div>
         <div class="legend-note">Other districts display regional meteorological risk models.</div>
       </div>
     </section>
 
-    <!-- Side Intelligence Panel -->
-    <aside class="sidebar">
-      
-      <!-- Regional Situation & District Alert Panel -->
-      <section class="card" id="situation-card">
-        <div class="card-header">
-          <div class="header-with-tag">
-            <h3>Situation Brief</h3>
-            <span class="source-tag" id="data-source-tag">REGIONAL MODEL</span>
-          </div>
-          <span class="badge blue" id="risk-badge">OVERVIEW</span>
-        </div>
-        <div id="district-alert-box" class="district-alert-box">
-          <strong id="district-alert-title">North Eastern Region (NER)</strong>
-          <p id="district-alert-body">Select a state and district to focus high-resolution slope models and real-time alerts.</p>
-        </div>
-      </section>
+    <aside class="sidebar" id="dashboard-sidebar">
 
-      <!-- Live Hardware Sensor Telemetry (ESP32) -->
-      <section class="card">
-        <div class="card-header">
-          <div>
-            <h3 id="telemetry-card-title">IoT Edge Telemetry</h3>
-            <small class="card-sub" id="telemetry-source-desc">Waiting for live ESP32 telemetry...</small>
-          </div>
-          <span class="badge gray" id="hardware-badge">MODEL DATA</span>
-        </div>
-        <div class="sensor-stats-grid">
-          <div class="stat-box">
-            <label>Tilt Deviation</label>
-            <div class="stat-value" id="val-tilt">—</div>
-          </div>
-          <div class="stat-box">
-            <label>Soil Moisture</label>
-            <div class="stat-value" id="val-moisture">—</div>
-          </div>
-          <div class="stat-box">
-            <label>Rainfall (24h)</label>
-            <div class="stat-value" id="val-rain">—</div>
-          </div>
-        </div>
-        <div class="chart-box">
-          <canvas id="telemetryChart"></canvas>
-        </div>
-      </section>
+      <!-- ================= PUBLIC / GUEST VIEW (Default) ================= -->
+      <div id="public-view-container">
 
-      <!-- SHAP Explainable AI Breakdown -->
-      <section class="card">
-        <div class="card-header">
-          <h3>Zone Analysis & AI SHAP</h3>
-          <span class="tag" id="selected-zone-name">Click a slope zone</span>
-        </div>
-        <div id="shap-details" class="shap-panel">
-          <p class="placeholder-text">Click any hazard heatmap polygon or sensor marker to inspect feature importance values.</p>
-        </div>
-      </section>
-
-      <!-- Multilingual Emergency Dispatch -->
-      <section class="card">
-        <div class="card-header">
-          <h3>Emergency Broadcast Trigger</h3>
-        </div>
-        <div class="dispatch-form">
-          <label>Target Regional Language:</label>
-          <select id="lang-select" class="custom-select">
-            <option value="en">English</option>
-            <option value="mz">Mizo (NER Native)</option>
-            <option value="as">Assamese</option>
-            <option value="bn">Bengali</option>
-          </select>
-          <div class="alert-preview-box" id="alert-preview-text">
-            "Warning: Heavy antecedent rainfall. Slope instability monitored in selected district."
+        <!-- ROUTES TO AVOID (PUBLIC & CITIZEN SAFETY) -->
+        <section class="card" id="routes-avoid-card"
+          style="border: 1px solid var(--panel-border); margin-top: 14px; margin-bottom: 14px;">
+          <div class="card-header"
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div class="header-with-tag" style="display: flex; align-items: center; gap: 8px;">
+              <h3
+                style="font-size: 13px; font-weight: 800; letter-spacing: 0.3px; margin: 0; text-transform: uppercase;">
+                ⚠️ Routes to Avoid
+              </h3>
+              <span class="source-tag"
+                style="background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;">
+                1 KM EXCLUSION
+              </span>
+            </div>
+            <span id="avoid-corridors-count"
+              style="font-size: 10px; font-weight: 700; background: #f1f5f9; color: #475569; padding: 2px 6px; border-radius: 4px;">
+              0 RESTRICTIONS
+            </span>
           </div>
-          <button class="btn btn-danger btn-full" id="btn-trigger-alert">📢 Transmit Emergency Alert (SMS/IVR)</button>
-        </div>
-      </section>
+
+          <p style="font-size: 11px; color: var(--text-dim); margin-top: 0; margin-bottom: 10px; line-height: 1.4;">
+            Active road segments within 1,000 meters of reported slope fissures or debris flow incidents:
+          </p>
+
+          <div id="avoid-routes-list"
+            style="display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto;">
+            <p style="color: #94a3b8; font-size: 12px; margin: 0; padding: 4px;">
+              All primary arterial corridors are currently open and clear.
+            </p>
+          </div>
+        </section>
+
+        <!-- Active Advisories -->
+        <section class="card" id="public-alerts-card">
+          <div class="card-header">
+            <div class="header-with-tag">
+              <h3>Public Safety Advisories</h3>
+              <span class="source-tag">NER EWS</span>
+            </div>
+            <span class="badge blue" id="public-alert-count">0 ACTIVE</span>
+          </div>
+          <div id="public-alerts-feed"
+            style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; padding: 4px 0;">
+            <p style="color: #64748b; font-size: 13px; margin: 0;">No active regional advisories issued.</p>
+          </div>
+        </section>
+
+        <!-- Key Highway & Corridor Watch -->
+        <section class="card" style="margin-top: 14px;">
+          <div class="card-header">
+            <h3>Critical Corridors Watch</h3>
+            <span class="badge blue">LIVE TRANSIT</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+
+            <div
+              style="display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+              <div>
+                <strong style="color: #0f172a; font-size: 13px; display: block;">NH-29 (Dimapur–Kohima)</strong>
+                <span style="font-size: 11px; color: #64748b;">Paglapahar Gorge corridor</span>
+              </div>
+              <span
+                style="font-size: 11px; font-weight: 700; color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; padding: 3px 8px; border-radius: 6px;">HIGH
+                RISK</span>
+            </div>
+
+            <div
+              style="display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+              <div>
+                <strong style="color: #0f172a; font-size: 13px; display: block;">NH-06 (Shillong–Silchar)</strong>
+                <span style="font-size: 11px; color: #64748b;">East Jaintia Hills section</span>
+              </div>
+              <span
+                style="font-size: 11px; font-weight: 700; color: #d97706; background: #fffbeb; border: 1px solid #fde68a; padding: 3px 8px; border-radius: 6px;">MONITORING</span>
+            </div>
+
+            <div
+              style="display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+              <div>
+                <strong style="color: #0f172a; font-size: 13px; display: block;">NH-10 (Siliguri–Gangtok)</strong>
+                <span style="font-size: 11px; color: #64748b;">Sevoke–Teesta transit link</span>
+              </div>
+              <span
+                style="font-size: 11px; font-weight: 700; color: #d97706; background: #fffbeb; border: 1px solid #fde68a; padding: 3px 8px; border-radius: 6px;">SLOPE
+                WATCH</span>
+            </div>
+
+            <div
+              style="display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+              <div>
+                <strong style="color: #0f172a; font-size: 13px; display: block;">Aizawl Bypass Arteries</strong>
+                <span style="font-size: 11px; color: #64748b;">Ramhlun & Laipuitlang cuts</span>
+              </div>
+              <span
+                style="font-size: 11px; font-weight: 700; color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; padding: 3px 8px; border-radius: 6px;">ELEVATED</span>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- Emergency Helpline Directory -->
+        <section class="card" style="margin-top: 14px;">
+          <div class="card-header">
+            <h3>Emergency Helplines</h3>
+            <span class="badge green" style="background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0;">24x7
+              TOLL-FREE</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 12px; border-radius: 8px;">
+              <div style="color: #64748b; font-size: 11px; font-weight: 600;">NDRF Control</div>
+              <strong style="color: #0284c7; font-size: 16px; font-weight: 700;">1078</strong>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 12px; border-radius: 8px;">
+              <div style="color: #64748b; font-size: 11px; font-weight: 600;">State Disaster (SDMA)</div>
+              <strong style="color: #0284c7; font-size: 16px; font-weight: 700;">1070</strong>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 12px; border-radius: 8px;">
+              <div style="color: #64748b; font-size: 11px; font-weight: 600;">Police Helpline</div>
+              <strong style="color: #0284c7; font-size: 16px; font-weight: 700;">112</strong>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 12px; border-radius: 8px;">
+              <div style="color: #64748b; font-size: 11px; font-weight: 600;">Ambulance / Medical</div>
+              <strong style="color: #0284c7; font-size: 16px; font-weight: 700;">108</strong>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- ================= OFFICIAL / SENSOR DIAGNOSTICS VIEW ================= -->
+      <div id="official-view-container" style="display: none;">
+
+        <!-- Official Ground Reports Moderation -->
+        <section class="card" style="margin-top: 14px;">
+          <div class="card-header">
+            <div class="header-with-tag">
+              <h3>Ground Hazard Reports</h3>
+              <span class="source-tag" style="background: rgba(2, 132, 199, 0.2); color: #38bdf8;">FIELD INTEL</span>
+            </div>
+            <button type="button" onclick="window.clearAllCitizenReports()"
+              style="background: rgba(239, 68, 68, 0.08); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 6px; font-size: 11px; font-weight: 700; padding: 5px 10px; cursor: pointer; transition: all 0.2s ease;">
+              Clear All Pins
+            </button>
+          </div>
+          <div id="official-reports-list"
+            style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; margin-top: 8px;">
+            <p style="color: #94a3b8; font-size: 12px; margin: 0;">No citizen field pins active on map.</p>
+          </div>
+        </section>
+
+        <!-- OFFICIAL ALERT BROADCAST ENGINE -->
+        <section class="card" id="official-alert-panel"
+          style="border: 1px solid #e2e8f0; margin-top: 14px; margin-bottom: 14px; background: #5353533f; border-radius: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); padding: 16px;">
+          <div class="card-header" style="margin-bottom: 12px;">
+            <div class="header-with-tag" style="display: flex; justify-content: space-between; align-items: center;">
+              <h3
+                style="color: #0f172a; font-size: 13px; font-weight: 799; letter-spacing: 0.3px; margin: 0; text-transform: uppercase;">
+                Broadcast Regional Alert</h3>
+              <span class="source-tag"
+                style="background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase;">EMERGENCY
+                DISPATCH</span>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <input id="alert-title" placeholder="Advisory Headline / Slope Notice..."
+              style="width: 100%; box-sizing: border-box; padding: 9px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: #f8fafc; color: #1e293b; font-size: 12px; outline: none;">
+
+            <div style="display: flex; gap: 8px;">
+              <select id="alert-region"
+                style="flex: 1.2; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; background: #f8fafc; color: #334155; font-size: 12px; font-weight: 600; outline: none; cursor: pointer;">
+                <option value="All NER States">All 8 NER States</option>
+                <option value="Mizoram">Mizoram</option>
+                <option value="Nagaland">Nagaland</option>
+                <option value="Sikkim">Sikkim</option>
+                <option value="Assam">Assam</option>
+                <option value="Meghalaya">Meghalaya</option>
+                <option value="Manipur">Manipur</option>
+                <option value="Arunachal Pradesh">Arunachal Pradesh</option>
+                <option value="Tripura">Tripura</option>
+              </select>
+
+              <select id="alert-severity"
+                style="flex: 1; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; background: #f8fafc; color: #334155; font-size: 12px; font-weight: 600; outline: none; cursor: pointer;">
+                <option value="Warning">Warning (Orange)</option>
+                <option value="Critical">Critical (Red)</option>
+              </select>
+            </div>
+
+            <button onclick="dispatchAlert()"
+              style="width: 100%; background: #2563eb; color: #ffffff; border: none; padding: 10px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 12px; transition: background 0.2s;">
+              📢 Transmit Network Alert
+            </button>
+          </div>
+        </section>
+        <!-- ACTIVE OPERATIONAL ALERTS FEED -->
+        <section class="card" id="alerts-card">
+          <div class="card-header">
+            <div class="header-with-tag">
+              <h3>Active Operational Alerts</h3>
+              <span class="source-tag" id="user-role-badge">OFFICIAL FEED</span>
+            </div>
+            <span class="badge blue" id="active-alert-count">0 ACTIVE</span>
+          </div>
+          <div id="alerts-feed-container"
+            style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; padding: 4px 0;">
+            <p style="color: #94a3b8; font-size: 13px; margin: 0;">No active advisories issued.</p>
+          </div>
+        </section>
+
+        <!-- GEOTECHNICAL SITUATION BRIEF -->
+        <section class="card" id="district-alert-box" style="margin-top: 14px; border-left: 4px solid #0284c7;">
+          <div class="card-header">
+            <div class="header-with-tag">
+              <h3>Geotechnical Situation Brief</h3>
+              <span class="source-tag" id="data-source-tag">REGIONAL MODEL</span>
+            </div>
+            <span class="badge blue" id="risk-badge">OVERVIEW</span>
+          </div>
+          <h4 id="district-alert-title" style="margin: 6px 0; font-size: 13px; color: #f8fafc;">North Eastern Region
+            (NER)</h4>
+          <p id="district-alert-body" style="font-size: 12px; color: #94a3b8; line-height: 1.4; margin: 0;">
+            Surveillance active across 8 NER states. Select Aizawl to inspect physical ESP32 telemetry.
+          </p>
+        </section>
+
+        <!-- IOT EDGE TELEMETRY -->
+        <section class="card" id="telemetry-card" style="margin-top: 14px;">
+          <div class="card-header">
+            <div>
+              <h3 id="telemetry-card-title">IoT Edge Telemetry</h3>
+              <div id="telemetry-source-desc" style="font-size: 11px; color: #64748b;">Data Source: Regional
+                Meteorological Model</div>
+            </div>
+            <span class="badge gray" id="hardware-badge">MODEL DATA</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0;">
+            <div style="background: #0f172a; padding: 8px 4px; border-radius: 4px; text-align: center;">
+              <div style="font-size: 10px; color: #94a3b8;">Tilt Angle</div>
+              <strong id="val-tilt" style="font-size: 14px; color: #ea580c;">—</strong>
+            </div>
+            <div style="background: #0f172a; padding: 8px 4px; border-radius: 4px; text-align: center;">
+              <div style="font-size: 10px; color: #94a3b8;">Soil Moisture</div>
+              <strong id="val-moisture" style="font-size: 14px; color: #0284c7;">—</strong>
+            </div>
+            <div style="background: #0f172a; padding: 8px 4px; border-radius: 4px; text-align: center;">
+              <div style="font-size: 10px; color: #94a3b8;">Precipitation</div>
+              <strong id="val-rain" style="font-size: 14px; color: #10b981;">—</strong>
+            </div>
+          </div>
+
+          <div style="height: 120px; position: relative;">
+            <canvas id="telemetryChart"></canvas>
+          </div>
+        </section>
+
+        <!-- ================= SHAP / RISK INFERENCE CARD ================= -->
+        <section class="card" style="margin-top: 14px;">
+          <div class="card-header">
+            <h3 id="selected-zone-name">AIZAWL: LAIPUITLANG URBAN SLOPE CUT</h3>
+            <span class="badge blue">Model Inference</span>
+          </div>
+
+          <div style="margin-top: 8px;">
+            <div
+              style="color: #64748b; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;">
+              Calculated Failure Probability
+            </div>
+
+            <!-- Scaled Probability Display -->
+            <div style="display: flex; align-items: baseline; gap: 8px; margin: 4px 0 8px 0;">
+              <span id="prob-percentage-val" style="font-size: 20px; font-weight: 800; color: #dc2626; line-height: 1;">
+                94.5%
+              </span>
+              <span
+                style="font-size: 12px; font-weight: 700; color: #dc2626; background: rgba(220, 38, 38, 0.1); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(220, 38, 38, 0.2);">
+                EXTREME RISK
+              </span>
+            </div>
+
+            <span class="badge blue" style="font-size: 11px; padding: 2px 6px;">Model: RF + SHAP</span>
+
+            <div style="margin-top: 10px;">
+              <strong style="font-size: 12px; color: #0f172a;">Why is this slope at risk?</strong>
+              <p style="font-size: 12px; color: #475569; margin: 3px 0 10px 0; line-height: 1.4;">
+                Steep excavated cut angle (39°) in Surma sandstone with high pore pressure undercutting the slope toe.
+              </p>
+
+              <!-- Factor Weight Bars -->
+              <div style="display: flex; flex-direction: column; gap: 7px; font-size: 12px;">
+                <div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                    <span>Antecedent Rain (24h)</span>
+                    <strong style="color: #991b1b;">+45%</strong>
+                  </div>
+                  <div style="height: 5px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                    <div style="width: 45%; height: 100%; background: #991b1b; border-radius: 3px;"></div>
+                  </div>
+                </div>
+
+                <div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                    <span>Slope Incline (39°)</span>
+                    <strong style="color: #991b1b;">+32%</strong>
+                  </div>
+                  <div style="height: 5px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                    <div style="width: 32%; height: 100%; background: #991b1b; border-radius: 3px;"></div>
+                  </div>
+                </div>
+
+                <div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                    <span>Soil Saturation (FC-28)</span>
+                    <strong style="color: #991b1b;">+22%</strong>
+                  </div>
+                  <div style="height: 5px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                    <div style="width: 22%; height: 100%; background: #991b1b; border-radius: 3px;"></div>
+                  </div>
+                </div>
+
+                <div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                    <span>Structural Overburden</span>
+                    <strong style="color: #991b1b;">+14%</strong>
+                  </div>
+                  <div style="height: 5px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                    <div style="width: 14%; height: 100%; background: #991b1b; border-radius: 3px;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" style="margin-top: 14px;">
+          <div class="card-header">
+            <h3>Emergency Broadcast Engine</h3>
+          </div>
+          <div style="margin-top: 8px;">
+            <select id="lang-select" class="custom-select"
+              style="width: 100%; margin-bottom: 8px; padding: 7px 10px; font-size: 12px;">
+              <option value="mz">Mizo (Duhlian)</option>
+              <option value="en">English Broadcast</option>
+              <option value="as">Assamese (অসমীয়া)</option>
+              <option value="bn">Bengali (বাংলা)</option>
+            </select>
+
+            <div id="alert-preview-text"
+              style="font-size: 11px; color: #64748b; font-style: italic; margin-bottom: 12px; line-height: 1.4; padding: 6px 8px; background: #f8fafc; border-radius: 4px; border-left: 2px solid #cbd5e1;">
+              "Fimkhurna: He laiah hian leimin hlauhawm a awm. Kham bul atangin inthiarfihlim vat rawh u."
+            </div>
+
+            <!-- Restyled Broadcast Button (Clean Crimson Gradient with Smooth Elevation) -->
+            <button id="btn-trigger-alert" class="submit-btn"
+              style="width: 100%; padding: 10px 14px; font-size: 13px; font-weight: 600; color: #ffffff; background: linear-gradient(135deg, #e11d48, #be123c); border: none; border-radius: 6px; box-shadow: 0 2px 6px rgba(225, 29, 72, 0.25); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s ease;">
+              <span>⚠️</span> Transmit Cell Broadcast
+            </button>
+          </div>
+        </section>
+
+      </div>
 
     </aside>
   </main>
 
-  <!-- Leaflet JS & Dashboard Code -->
+  <div id="login-modal"
+    style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center;">
+    <div
+      style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; width: 100%; max-width: 380px; padding: 24px; color: #f8fafc; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+      <button onclick="closeLoginModal()"
+        style="position: absolute; right: 14px; top: 12px; background: transparent; border: none; color: #94a3b8; font-size: 20px; cursor: pointer;">&times;</button>
+
+      <h3 style="margin: 0 0 4px 0;">Portal Sign In</h3>
+      <p style="margin: 0 0 16px 0; color: #94a3b8; font-size: 13px;">Select account type</p>
+
+      <div style="display: flex; background: #0f172a; padding: 4px; border-radius: 8px; margin-bottom: 16px;">
+        <button type="button" id="tab-citizen" onclick="selectRole('citizen')"
+          style="flex: 1; padding: 8px; border: none; background: #2563eb; color: #fff; border-radius: 6px; font-weight: 600; cursor: pointer;">Citizen</button>
+        <button type="button" id="tab-official" onclick="selectRole('official')"
+          style="flex: 1; padding: 8px; border: none; background: transparent; color: #94a3b8; border-radius: 6px; font-weight: 600; cursor: pointer;">Official</button>
+      </div>
+
+      <form onsubmit="submitLogin(event)">
+        <label id="login-id-label" style="font-size: 12px; color: #94a3b8;">Citizen Mobile / Email</label>
+        <input type="text" id="login-id-input" required placeholder="Enter mobile or email"
+          style="width: 100%; box-sizing: border-box; padding: 10px; margin: 6px 0 14px 0; background: #0f172a; border: 1px solid #334155; color: #fff; border-radius: 6px;">
+
+        <label style="font-size: 12px; color: #94a3b8;">Password</label>
+        <input type="password" id="login-pwd-input" required placeholder="••••••••"
+          style="width: 100%; box-sizing: border-box; padding: 10px; margin: 6px 0 18px 0; background: #0f172a; border: 1px solid #334155; color: #fff; border-radius: 6px;">
+
+        <button type="submit"
+          style="width: 100%; padding: 10px; background: #2563eb; border: none; color: #fff; border-radius: 6px; font-weight: 700; cursor: pointer;">Sign
+          In</button>
+      </form>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="dashboard.js"></script>
 </body>
+
 </html>

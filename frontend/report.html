@@ -244,13 +244,17 @@
   </div>
 
   <script>
+    const currentRole = sessionStorage.getItem('userRole');
+    if (!currentRole || currentRole !== 'citizen') {
+      window.location.href = 'login.html';
+    }
+
     let uploadedImageBase64 = null;
     const previewWrapper = document.getElementById('image-preview-wrapper');
     const previewImg = document.getElementById('image-preview');
     const repImageInput = document.getElementById('rep-image');
     const statusMsg = document.getElementById('status-msg');
 
-    // Handle Photo Preview & Base64 storage
     repImageInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file) {
@@ -271,7 +275,6 @@
       previewImg.src = '';
     };
 
-    // Auto-detect GPS (defaults to Aizawl coordinates if blocked on desktop)
     document.getElementById('btn-gps').onclick = () => {
       statusMsg.innerText = "Acquiring GPS fix...";
       statusMsg.style.color = "var(--accent-blue)";
@@ -284,7 +287,6 @@
             statusMsg.style.color = "var(--accent-green)";
           },
           () => {
-            // Fallback default coordinates (Aizawl region)
             document.getElementById('rep-lat').value = "23.7307";
             document.getElementById('rep-lng').value = "92.7173";
             statusMsg.innerText = "GPS unavailable. Set default to Aizawl slope coordinates.";
@@ -294,7 +296,6 @@
       }
     };
 
-    // Form Submission: Sync to localStorage and redirect back to dashboard
     document.getElementById('standalone-report-form').onsubmit = async (e) => {
       e.preventDefault();
       statusMsg.innerText = "Pinning to dashboard map...";
@@ -304,30 +305,31 @@
       const lng = parseFloat(document.getElementById('rep-lng').value);
       const hazardType = document.getElementById('rep-type').value;
       const desc = document.getElementById('rep-desc').value;
+      const reporter = sessionStorage.getItem('userId') || 'Citizen';
 
       const newReport = {
         lat: lat,
         lng: lng,
         type: hazardType,
         desc: desc,
+        reporter: reporter,
         image: uploadedImageBase64,
         timestamp: new Date().toISOString()
       };
 
-      // 1. Save to persistent localStorage for index.html map consumption
       try {
         const list = JSON.parse(localStorage.getItem('giri_citizen_reports') || '[]');
         list.push(newReport);
         localStorage.setItem('giri_citizen_reports', JSON.stringify(list));
         localStorage.setItem('giri_latest_report', JSON.stringify(newReport));
+        sessionStorage.setItem('just_reported', 'true');
       } catch (err) {
         console.warn('Storage failed:', err);
       }
 
-      // 2. Optional POST to backend
       const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-        ? 'http://localhost:8000'
-        : 'https://girirakshak-api.onrender.com';
+        ? 'http://127.0.0.1:8000'
+        : 'https://YOUR-ACTUAL-RENDER-URL.onrender.com';
 
       try {
         await fetch(`${API_BASE}/api/citizen-report`, {
@@ -340,7 +342,6 @@
       statusMsg.innerText = "✅ Incident successfully pinned! Returning to map...";
       statusMsg.style.color = "var(--accent-green)";
 
-      // Return to dashboard map view after short pause
       setTimeout(() => {
         window.location.href = "index.html";
       }, 900);

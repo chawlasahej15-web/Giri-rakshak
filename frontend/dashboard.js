@@ -1,6 +1,7 @@
 // =========================================================================
 // GiriRakshak SIH Early Warning System Engine
 // Complete Live Regional Open-Meteo Ingestion + GSI Dendritic Ridge Heatmap
+// Real-time ESP32 Pipeline + Overpass Highway Network 1 km Avoidance Corridors
 // =========================================================================
 
 const NER_CENTER = [25.8, 93.2];
@@ -27,6 +28,7 @@ const rasterHeatmapGroup = L.layerGroup().addTo(map);
 const zoneLayerGroup = L.layerGroup().addTo(map);
 const hardwareMarkerGroup = L.layerGroup().addTo(map);
 const citizenMarkerGroup = L.layerGroup().addTo(map);
+const avoidZonesGroup = L.layerGroup().addTo(map);
 
 // 2. Comprehensive 8-State Geological Coordinates & District Directory
 const nerData = {
@@ -374,32 +376,7 @@ const nerData = {
 };
 
 // 3. Pre-Seeded Ground Citizen Reports
-const seedCitizenReports = [
-  {
-    coords: [23.733, 92.715],
-    text: "Active 4-inch tension crack observed across Ramhlun bypass asphalt.",
-    type: "Road Surface Tension Crack",
-    place: "Aizawl, Mizoram"
-  },
-  {
-    coords: [25.908, 93.731],
-    text: "Loose rock boulders rolling onto road near Paglapahar bridge.",
-    type: "Mud / Rock Runoff",
-    place: "Dimapur, Nagaland"
-  },
-  {
-    coords: [27.342, 88.611],
-    text: "Mudflow spilling over concrete retaining barrier on JN Road.",
-    type: "Mud / Rock Runoff",
-    place: "Gangtok, Sikkim"
-  },
-  {
-    coords: [25.174, 93.028],
-    text: "Embankment slump observed near railway track foundation.",
-    type: "Retaining Wall Tilt",
-    place: "Haflong, Assam"
-  }
-];
+const seedCitizenReports = [];
 
 // 4. Multilingual Dispatch Translations
 const translations = {
@@ -426,11 +403,9 @@ function getHazardColor(scoreOrLevel) {
   }
 
   const score = Number(scoreOrLevel) || 0;
-
   if (score >= 90) return '#991b1b';
   if (score >= 75) return '#dc2626';
   if (score >= 60) return '#ea580c';
-
   return '#f97316';
 }
 
@@ -438,14 +413,14 @@ function getHazardColor(scoreOrLevel) {
 let telemetryChart;
 
 function initChart() {
-  const ctx = document.getElementById('telemetryChart').getContext('2d');
+  const chartCanvas = document.getElementById('telemetryChart');
+  if (!chartCanvas) return;
+  const ctx = chartCanvas.getContext('2d');
 
   telemetryChart = new Chart(ctx, {
     type: 'line',
-
     data: {
       labels: ['-20s', '-16s', '-12s', '-8s', '-4s', 'Now'],
-
       datasets: [
         {
           label: 'Tilt (°)',
@@ -457,7 +432,6 @@ function initChart() {
           pointRadius: 3,
           fill: true
         },
-
         {
           label: 'Moisture (%)',
           data: [65, 70, 75, 80, 85, 89],
@@ -470,46 +444,25 @@ function initChart() {
         }
       ]
     },
-
     options: {
       responsive: true,
       maintainAspectRatio: false,
-
       scales: {
         x: {
-          grid: {
-            color: '#f1f5f9'
-          },
-          ticks: {
-            color: '#64748b',
-            font: {
-              size: 9
-            }
-          }
+          grid: { color: '#f1f5f9' },
+          ticks: { color: '#64748b', font: { size: 9 } }
         },
-
         y: {
-          grid: {
-            color: '#f1f5f9'
-          },
-          ticks: {
-            color: '#64748b',
-            font: {
-              size: 9
-            }
-          }
+          grid: { color: '#f1f5f9' },
+          ticks: { color: '#64748b', font: { size: 9 } }
         }
       },
-
       plugins: {
         legend: {
           labels: {
             color: '#0f172a',
             boxWidth: 10,
-            font: {
-              size: 9,
-              weight: 'bold'
-            }
+            font: { size: 9, weight: 'bold' }
           }
         }
       }
@@ -531,91 +484,41 @@ async function fetchLiveWeatherForDistrict(lat, lng) {
       `&timezone=auto`;
 
     const res = await fetch(url);
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const data = await res.json();
-
-    const rawSoil =
-      data.current?.soil_moisture_0_to_1cm ?? 0.35;
-
-    const moistPercent =
-      Math.min(
-        98,
-        Math.max(
-          30,
-          Math.round(rawSoil * 180)
-        )
-      );
-
-    const dailyRain =
-      data.daily?.precipitation_sum?.[0] ??
-      Math.round(Math.random() * 40 + 30);
+    const rawSoil = data.current?.soil_moisture_0_to_1cm ?? 0.35;
+    const moistPercent = Math.min(98, Math.max(30, Math.round(rawSoil * 180)));
+    const dailyRain = data.daily?.precipitation_sum?.[0] ?? Math.round(Math.random() * 40 + 30);
 
     return {
       rain: Math.round(dailyRain),
       moisture: moistPercent
     };
-
   } catch (err) {
-
-    console.warn(
-      `[Open-Meteo] Live API unreachable for [${lat}, ${lng}]. Using baseline.`,
-      err.message
-    );
-
+    console.warn(`[Open-Meteo] Live API unreachable for [${lat}, ${lng}]. Using baseline.`, err.message);
     return null;
   }
 }
 
-// Synchronize all 8 NER states with live API data on load
-// (Updates memory without wiping markers)
 async function syncAllRegionalLiveFeeds() {
-
   for (const sKey of Object.keys(nerData)) {
-
     const state = nerData[sKey];
-
     for (const dKey of Object.keys(state.districts)) {
-
       const dist = state.districts[dKey];
+      if (dist.isHardwareNode) continue;
 
-      // Physical Aizawl node is handled separately.
-      if (dist.isHardwareNode) {
-        continue;
-      }
+      const live = await fetchLiveWeatherForDistrict(dist.center[0], dist.center[1]);
+      if (live) {
+        dist.telemetry.rain = live.rain;
+        dist.telemetry.moisture = live.moisture;
 
-      const live =
-        await fetchLiveWeatherForDistrict(
-          dist.center[0],
-          dist.center[1]
+        const calculatedRisk = Math.min(
+          96,
+          Math.max(45, Math.round(live.rain * 0.45 + live.moisture * 0.4))
         );
 
-      if (live) {
-
-        dist.telemetry.rain =
-          live.rain;
-
-        dist.telemetry.moisture =
-          live.moisture;
-
-        const calculatedRisk =
-          Math.min(
-            96,
-            Math.max(
-              45,
-              Math.round(
-                live.rain * 0.45 +
-                live.moisture * 0.4
-              )
-            )
-          );
-
-        dist.riskScore =
-          calculatedRisk;
-
+        dist.riskScore = calculatedRisk;
         if (calculatedRisk >= 85) {
           dist.riskLevel = 'extreme';
         } else if (calculatedRisk >= 75) {
@@ -629,62 +532,10 @@ async function syncAllRegionalLiveFeeds() {
 }
 
 // ===========================================
-// BACKEND ML RISK DATA
+// BACKEND ML RISK DATA (FastAPI Pipeline)
 // ===========================================
 
 let backendRiskZones = [];
-
-async function loadBackendRiskZones() {
-
-  try {
-
-    const response =
-      await fetch(
-        `${getApiBase()}/api/risk-zones`
-      );
-
-    if (!response.ok) {
-      throw new Error(
-        `API returned ${response.status}`
-      );
-    }
-
-    const zones =
-      await response.json();
-
-    backendRiskZones =
-      Array.isArray(zones)
-        ? zones
-        : [];
-
-    console.log(
-      'REAL BACKEND ML RISK ZONES:',
-      backendRiskZones
-    );
-
-    renderBackendRiskZones(
-      backendRiskZones
-    );
-
-    return backendRiskZones;
-
-  } catch (error) {
-
-    console.error(
-      'Failed to load backend risk zones:',
-      error
-    );
-
-    backendRiskZones = [];
-
-    return [];
-  }
-}
-
-// =====================================================
-// LIVE ESP32 TELEMETRY
-// =====================================================
-
 let latestSensorReading = null;
 let selectedBackendZoneId = null;
 let telemetryViewMode = 'overview';
@@ -698,416 +549,187 @@ function getApiBase() {
     : 'https://YOUR-ACTUAL-RENDER-URL.onrender.com';
 }
 
-async function loadLatestSensorTelemetryForZone(zoneId) {
-
+async function loadBackendRiskZones() {
   try {
+    const response = await fetch(`${getApiBase()}/api/risk-zones`);
+    if (!response.ok) throw new Error(`API returned ${response.status}`);
+    const zones = await response.json();
+    backendRiskZones = Array.isArray(zones) ? zones : [];
+    console.log('REAL BACKEND ML RISK ZONES:', backendRiskZones);
+    renderBackendRiskZones(backendRiskZones);
+    return backendRiskZones;
+  } catch (error) {
+    console.error('Failed to load backend risk zones:', error);
+    backendRiskZones = [];
+    return [];
+  }
+}
 
-    const response =
-      await fetch(
-        `${getApiBase()}/api/sensor-data/latest/${encodeURIComponent(zoneId)}`,
-        {
-          cache: 'no-store'
-        }
-      );
+// =====================================================
+// LIVE ESP32 TELEMETRY (FastAPI Sensor Data Pipeline)
+// =====================================================
 
-    if (!response.ok) {
-      throw new Error(
-        `API returned ${response.status}`
-      );
-    }
-
-    const data =
-      await response.json();
-
-    if (
-      data.status !== 'ok' ||
-      !data.reading
-    ) {
-
-      console.warn(
-        `No sensor telemetry for ${zoneId}`
-      );
-
+async function loadLatestSensorTelemetryForZone(zoneId) {
+  try {
+    const response = await fetch(
+      `${getApiBase()}/api/sensor-data/latest/${encodeURIComponent(zoneId)}`,
+      { cache: 'no-store' }
+    );
+    if (!response.ok) throw new Error(`API returned ${response.status}`);
+    const data = await response.json();
+    if (data.status !== 'ok' || !data.reading) {
+      console.warn(`No sensor telemetry for ${zoneId}`);
       return;
     }
 
-    // Ignore stale response if user clicked
-    // another zone meanwhile.
-    if (
-      selectedBackendZoneId !== zoneId
-    ) {
-      return;
+    if (selectedBackendZoneId !== zoneId) return;
+
+    const reading = data.reading;
+    const tilt = Number(reading.tilt_deg);
+    const moisture = Number(reading.moisture_pct);
+
+    const titleEl = document.getElementById('telemetry-card-title');
+    const descEl = document.getElementById('telemetry-source-desc');
+    const badgeEl = document.getElementById('hardware-badge');
+    const tiltEl = document.getElementById('val-tilt');
+    const moistEl = document.getElementById('val-moisture');
+    const rainEl = document.getElementById('val-rain');
+
+    if (titleEl) titleEl.innerText = `${zoneId} — Sensor Telemetry`;
+    if (descEl) descEl.innerText = `Data Source: Sensor Simulation / ESP32 Pipeline • Updated ${formatSensorTime(reading.timestamp)}`;
+    if (badgeEl) {
+      badgeEl.className = 'badge blue';
+      badgeEl.innerText = 'SENSOR DATA';
     }
+    if (tiltEl) tiltEl.innerText = Number.isFinite(tilt) ? `${tilt.toFixed(1)}°` : '—';
+    if (moistEl) moistEl.innerText = Number.isFinite(moisture) ? `${moisture.toFixed(1)}%` : '—';
+    if (rainEl) rainEl.innerText = '—';
 
-    const reading =
-      data.reading;
-
-    const tilt =
-      Number(reading.tilt_deg);
-
-    const moisture =
-      Number(reading.moisture_pct);
-
-    document.getElementById(
-      'telemetry-card-title'
-    ).innerText =
-      `${zoneId} — Sensor Telemetry`;
-
-    document.getElementById(
-      'telemetry-source-desc'
-    ).innerText =
-      `Data Source: Sensor Simulation / ESP32 Pipeline • Updated ${formatSensorTime(reading.timestamp)}`;
-
-    document.getElementById(
-      'hardware-badge'
-    ).className =
-      'badge blue';
-
-    document.getElementById(
-      'hardware-badge'
-    ).innerText =
-      'SENSOR DATA';
-
-    document.getElementById(
-      'val-tilt'
-    ).innerText =
-      Number.isFinite(tilt)
-        ? `${tilt.toFixed(1)}°`
-        : '—';
-
-    document.getElementById(
-      'val-moisture'
-    ).innerText =
-      Number.isFinite(moisture)
-        ? `${moisture.toFixed(1)}%`
-        : '—';
-
-    // No rainfall sensor in simulator payload.
-    document.getElementById(
-      'val-rain'
-    ).innerText =
-      '—';
-
-    if (
-      telemetryChart &&
-      telemetryChart.data &&
-      telemetryChart.data.datasets.length >= 2
-    ) {
-
-      const tiltData =
-        telemetryChart.data.datasets[0].data;
-
-      const moistureData =
-        telemetryChart.data.datasets[1].data;
-
+    if (telemetryChart && telemetryChart.data && telemetryChart.data.datasets.length >= 2) {
+      const tiltData = telemetryChart.data.datasets[0].data;
+      const moistureData = telemetryChart.data.datasets[1].data;
       tiltData.fill(tilt);
       moistureData.fill(moisture);
-
       telemetryChart.update('none');
     }
 
-    console.log(
-      `ZONE SENSOR TELEMETRY [${zoneId}]:`,
-      reading
-    );
-
+    console.log(`ZONE SENSOR TELEMETRY [${zoneId}]:`, reading);
   } catch (error) {
-
-    console.warn(
-      `Failed to load telemetry for ${zoneId}:`,
-      error
-    );
+    console.warn(`Failed to load telemetry for ${zoneId}:`, error);
   }
 }
 
 function formatSensorTime(timestamp) {
-
-  if (!timestamp) {
-    return 'time unavailable';
-  }
-
-  const date =
-    new Date(timestamp);
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return timestamp;
-  }
-
-  return date.toLocaleString();
+  if (!timestamp) return 'time unavailable';
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? timestamp : date.toLocaleString();
 }
-
-// =====================================================
-// TELEMETRY VIEW ROUTER
-// =====================================================
-// Overview -> no fabricated sensor values.
-// Hardware view -> the physical ESP32_01 node only.
-// Selected backend ML zone -> that zone's own simulator/sensor data.
 
 async function loadLatestSensorTelemetry() {
-
-  if (
-    telemetryViewMode !== 'hardware'
-  ) {
-    return null;
-  }
-
-  return loadLatestSensorTelemetryBySensorId(
-    'ESP32_01'
-  );
+  if (telemetryViewMode !== 'hardware') return null;
+  return loadLatestSensorTelemetryBySensorId('ESP32_01');
 }
 
-async function loadLatestSensorTelemetryBySensorId(
-  sensorId
-) {
-
+async function loadLatestSensorTelemetryBySensorId(sensorId) {
   try {
-
-    const response =
-      await fetch(
-        `${getApiBase()}/api/sensor-data/latest/${encodeURIComponent(sensorId)}`,
-        {
-          cache: 'no-store'
-        }
-      );
-
-    if (!response.ok) {
-      throw new Error(
-        `API returned ${response.status}`
-      );
-    }
-
-    const data =
-      await response.json();
-
-    if (
-      data.status !== 'ok' ||
-      !data.reading
-    ) {
-
-      console.warn(
-        `No sensor telemetry for ${sensorId}`
-      );
-
+    const response = await fetch(
+      `${getApiBase()}/api/sensor-data/latest/${encodeURIComponent(sensorId)}`,
+      { cache: 'no-store' }
+    );
+    if (!response.ok) throw new Error(`API returned ${response.status}`);
+    const data = await response.json();
+    if (data.status !== 'ok' || !data.reading) {
+      console.warn(`No sensor telemetry for ${sensorId}`);
       return null;
     }
 
-    const reading =
-      data.reading;
+    const reading = data.reading;
+    latestSensorReading = reading;
+    const tilt = Number(reading.tilt_deg);
+    const moisture = Number(reading.moisture_pct);
 
-    latestSensorReading =
-      reading;
+    const titleEl = document.getElementById('telemetry-card-title');
+    const descEl = document.getElementById('telemetry-source-desc');
+    const badgeEl = document.getElementById('hardware-badge');
+    const tiltEl = document.getElementById('val-tilt');
+    const moistEl = document.getElementById('val-moisture');
+    const rainEl = document.getElementById('val-rain');
 
-    const tilt =
-      Number(reading.tilt_deg);
+    if (titleEl) titleEl.innerText = `${sensorId} — ESP32 Edge Telemetry`;
+    if (descEl) descEl.innerText = `Data Source: Physical ESP32 Sensor • Updated ${formatSensorTime(reading.timestamp)}`;
+    if (badgeEl) {
+      badgeEl.className = 'badge purple';
+      badgeEl.innerText = 'LIVE HARDWARE';
+    }
+    if (tiltEl) tiltEl.innerText = Number.isFinite(tilt) ? `${tilt.toFixed(1)}°` : '—';
+    if (moistEl) moistEl.innerText = Number.isFinite(moisture) ? `${moisture.toFixed(1)}%` : '—';
+    if (rainEl) rainEl.innerText = '—';
 
-    const moisture =
-      Number(reading.moisture_pct);
-
-    document.getElementById(
-      'telemetry-card-title'
-    ).innerText =
-      `${sensorId} — ESP32 Edge Telemetry`;
-
-    document.getElementById(
-      'telemetry-source-desc'
-    ).innerText =
-      `Data Source: Physical ESP32 Sensor • Updated ${formatSensorTime(reading.timestamp)}`;
-
-    document.getElementById(
-      'hardware-badge'
-    ).className =
-      'badge purple';
-
-    document.getElementById(
-      'hardware-badge'
-    ).innerText =
-      'LIVE HARDWARE';
-
-    document.getElementById(
-      'val-tilt'
-    ).innerText =
-      Number.isFinite(tilt)
-        ? `${tilt.toFixed(1)}°`
-        : '—';
-
-    document.getElementById(
-      'val-moisture'
-    ).innerText =
-      Number.isFinite(moisture)
-        ? `${moisture.toFixed(1)}%`
-        : '—';
-
-    document.getElementById(
-      'val-rain'
-    ).innerText =
-      '—';
-
-    if (
-      telemetryChart &&
-      telemetryChart.data &&
-      telemetryChart.data.datasets.length >= 2
-    ) {
-
-      telemetryChart.data.datasets[0].data = [
-        tilt,
-        tilt,
-        tilt,
-        tilt,
-        tilt,
-        tilt
-      ];
-
-      telemetryChart.data.datasets[1].data = [
-        moisture,
-        moisture,
-        moisture,
-        moisture,
-        moisture,
-        moisture
-      ];
-
+    if (telemetryChart && telemetryChart.data && telemetryChart.data.datasets.length >= 2) {
+      telemetryChart.data.datasets[0].data = [tilt, tilt, tilt, tilt, tilt, tilt];
+      telemetryChart.data.datasets[1].data = [moisture, moisture, moisture, moisture, moisture, moisture];
       telemetryChart.update('none');
     }
 
-    console.log(
-      `HARDWARE SENSOR TELEMETRY [${sensorId}]:`,
-      reading
-    );
-
+    console.log(`HARDWARE SENSOR TELEMETRY [${sensorId}]:`, reading);
     return reading;
-
   } catch (error) {
-
-    console.warn(
-      `Failed to load telemetry for ${sensorId}:`,
-      error
-    );
-
+    console.warn(`Failed to load telemetry for ${sensorId}:`, error);
     return null;
   }
 }
 
 async function refreshTelemetry() {
-
-  if (
-    telemetryViewMode === 'ml-zone' &&
-    selectedBackendZoneId
-  ) {
-
-    await loadLatestSensorTelemetryForZone(
-      selectedBackendZoneId
-    );
-
+  if (telemetryViewMode === 'ml-zone' && selectedBackendZoneId) {
+    await loadLatestSensorTelemetryForZone(selectedBackendZoneId);
     return;
   }
-
-  if (
-    telemetryViewMode === 'hardware'
-  ) {
-
+  if (telemetryViewMode === 'hardware') {
     await loadLatestSensorTelemetry();
-
-    return;
   }
-
-  // Overview intentionally does not show
-  // a random/last simulator reading.
 }
 
 function renderBackendRiskZones(zones) {
-
-  console.log(
-    `Rendering ${zones.length} real backend risk zones`
-  );
+  console.log(`Rendering ${zones.length} real backend risk zones`);
 
   zones.forEach(zone => {
+    const lat = Number(zone.lat);
+    const lon = Number(zone.lon);
+    const score = Number(zone.risk_score || 0);
+    const level = String(zone.risk_level || 'Unknown');
 
-    const lat =
-      Number(zone.lat);
-
-    const lon =
-      Number(zone.lon);
-
-    const score =
-      Number(
-        zone.risk_score || 0
-      );
-
-    const level =
-      String(
-        zone.risk_level || 'Unknown'
-      );
-
-    if (
-      !Number.isFinite(lat) ||
-      !Number.isFinite(lon)
-    ) {
-
-      console.warn(
-        'Skipping invalid zone coordinates:',
-        zone
-      );
-
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      console.warn('Skipping invalid zone coordinates:', zone);
       return;
     }
 
-    const color =
-      getHazardColor(score);
+    const color = getHazardColor(score);
+    const marker = L.circleMarker([lat, lon], {
+      radius: score >= 80 ? 12 : score >= 60 ? 10 : 8,
+      color: '#ffffff',
+      weight: 2,
+      fillColor: color,
+      fillOpacity: 0.9
+    });
 
-    const marker =
-      L.circleMarker(
-        [lat, lon],
-        {
-          radius:
-            score >= 80
-              ? 12
-              : score >= 60
-                ? 10
-                : 8,
+    marker.bindTooltip(`<b>${zone.zone_id}</b><br>Risk: ${score.toFixed(1)}%<br>Level: ${level.toUpperCase()}`);
+    marker.bindPopup(`
+      <div style="min-width:190px;">
+        <strong>${zone.zone_id}</strong><br>
+        Risk Score: <strong>${score.toFixed(1)}%</strong><br>
+        Risk Level: <strong>${level.toUpperCase()}</strong><br>
+        <span style="font-size:11px;color:#64748b;">REAL BACKEND ML OUTPUT</span>
+      </div>
+    `);
 
-          color: '#ffffff',
-          weight: 2,
-          fillColor: color,
-          fillOpacity: 0.9
-        }
-      );
+    marker.on('click', () => {
+      updateBackendZoneView(zone);
+    });
 
-    marker.bindTooltip(
-      `<b>${zone.zone_id}</b><br>` +
-      `Risk: ${score.toFixed(1)}%<br>` +
-      `Level: ${level.toUpperCase()}`
-    );
-
-    marker.bindPopup(
-      `<div style="min-width:190px;">` +
-      `<strong>${zone.zone_id}</strong><br>` +
-      `Risk Score: <strong>${score.toFixed(1)}%</strong><br>` +
-      `Risk Level: <strong>${level.toUpperCase()}</strong><br>` +
-      `<span style="font-size:11px;color:#64748b;">REAL BACKEND ML OUTPUT</span>` +
-      `</div>`
-    );
-
-    marker.on(
-      'click',
-      () => {
-        updateBackendZoneView(
-          zone
-        );
-      }
-    );
-
-    zoneLayerGroup.addLayer(
-      marker
-    );
+    zoneLayerGroup.addLayer(marker);
   });
 
-  console.log(
-    `Real backend zones rendered: ${zones.length}`
-  );
+  console.log(`Real backend zones rendered: ${zones.length}`);
 }
 
 // =========================================================================
@@ -1115,7 +737,6 @@ function renderBackendRiskZones(zones) {
 // =========================================================================
 
 function renderDendriticRidgeHeatmap() {
-
   rasterHeatmapGroup.clearLayers();
 
   const bounds = [
@@ -1131,722 +752,270 @@ function renderDendriticRidgeHeatmap() {
           <feComposite in="SourceGraphic" in2="blur" operator="over" />
         </filter>
       </defs>
-
-      <!-- 1. Regional Blue Catchment Wash -->
-      <path d="
-        M 210,540
-        Q 230,460 270,410
-        T 340,320
-        T 420,240
-        T 520,150
-        T 570,120
-        Q 590,160 560,230
-        T 510,340
-        T 460,430
-        T 420,530
-        T 360,630
-        Q 290,660 240,620
-        Z"
-        fill="#38bdf8"
-        fill-opacity="0.38"
-        filter="url(#glow)"
-      />
-
-      <path
-        d="M 280,430 Q 320,380 390,360 T 480,280"
-        fill="none"
-        stroke="#7dd3fc"
-        stroke-width="32"
-        stroke-linecap="round"
-        opacity="0.35"
-        filter="url(#glow)"
-      />
-
-      <path
-        d="M 330,520 Q 370,470 430,410 T 490,360"
-        fill="none"
-        stroke="#7dd3fc"
-        stroke-width="26"
-        stroke-linecap="round"
-        opacity="0.35"
-        filter="url(#glow)"
-      />
-
-      <!-- 2. Orange Buffer Slopes -->
-      <g
-        stroke="#ea580c"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        fill="none"
-        opacity="0.8"
-        filter="url(#glow)"
-      >
-        <path
-          d="M 240,560 Q 280,480 330,440 T 410,330 T 490,210 T 540,140"
-          stroke-width="15"
-        />
-        <path
-          d="M 330,440 Q 380,410 430,430 T 500,450"
-          stroke-width="12"
-        />
-        <path
-          d="M 410,330 Q 460,320 510,290"
-          stroke-width="10"
-        />
-        <path
-          d="M 270,590 Q 310,540 360,520 T 430,490"
-          stroke-width="12"
-        />
+      <path d="M 210,540 Q 230,460 270,410 T 340,320 T 420,240 T 520,150 T 570,120 Q 590,160 560,230 T 510,340 T 460,430 T 420,530 T 360,630 Q 290,660 240,620 Z" fill="#38bdf8" fill-opacity="0.38" filter="url(#glow)"/>
+      <path d="M 280,430 Q 320,380 390,360 T 480,280" fill="none" stroke="#7dd3fc" stroke-width="32" stroke-linecap="round" opacity="0.35" filter="url(#glow)"/>
+      <path d="M 330,520 Q 370,470 430,410 T 490,360" fill="none" stroke="#7dd3fc" stroke-width="26" stroke-linecap="round" opacity="0.35" filter="url(#glow)"/>
+      <g stroke="#ea580c" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.8" filter="url(#glow)">
+        <path d="M 240,560 Q 280,480 330,440 T 410,330 T 490,210 T 540,140" stroke-width="15"/>
+        <path d="M 330,440 Q 380,410 430,430 T 500,450" stroke-width="12"/>
+        <path d="M 410,330 Q 460,320 510,290" stroke-width="10"/>
+        <path d="M 270,590 Q 310,540 360,520 T 430,490" stroke-width="12"/>
       </g>
-
-      <!-- 3. Red Dendritic Ridge Network -->
-      <g
-        stroke="#991b1b"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        fill="none"
-        opacity="0.95"
-      >
-        <path
-          d="M 240,560 Q 280,480 330,440 T 410,330 T 490,210 T 540,140"
-          stroke-width="5.5"
-        />
-
-        <path
-          d="M 330,440 Q 380,410 430,430 T 500,450"
-          stroke-width="4.5"
-        />
-
-        <path
-          d="M 365,425 Q 395,380 435,370 T 475,340"
-          stroke-width="4"
-        />
-
-        <path
-          d="M 410,330 Q 460,320 510,290"
-          stroke-width="4"
-        />
-
-        <path
-          d="M 450,270 Q 480,250 510,240"
-          stroke-width="3.5"
-        />
-
-        <path
-          d="M 270,590 Q 310,540 360,520 T 430,490"
-          stroke-width="4.5"
-        />
-
-        <path
-          d="M 305,505 Q 340,480 370,475"
-          stroke-width="3.5"
-        />
+      <g stroke="#991b1b" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.95">
+        <path d="M 240,560 Q 280,480 330,440 T 410,330 T 490,210 T 540,140" stroke-width="5.5"/>
+        <path d="M 330,440 Q 380,410 430,430 T 500,450" stroke-width="4.5"/>
+        <path d="M 365,425 Q 395,380 435,370 T 475,340" stroke-width="4"/>
+        <path d="M 410,330 Q 460,320 510,290" stroke-width="4"/>
+        <path d="M 450,270 Q 480,250 510,240" stroke-width="3.5"/>
+        <path d="M 270,590 Q 310,540 360,520 T 430,490" stroke-width="4.5"/>
+        <path d="M 305,505 Q 340,480 370,475" stroke-width="3.5"/>
       </g>
-
-      <!-- 4. Bright Red Failure Points -->
-      <g
-        stroke="#dc2626"
-        stroke-linecap="round"
-        fill="none"
-        opacity="0.9"
-      >
-        <path
-          d="M 330,440 L 365,425 L 410,330 L 450,270 L 490,210"
-          stroke-width="2.5"
-        />
+      <g stroke="#dc2626" stroke-linecap="round" fill="none" opacity="0.9">
+        <path d="M 330,440 L 365,425 L 410,330 L 450,270 L 490,210" stroke-width="2.5"/>
       </g>
     </svg>
   `;
 
-  const svgUrl =
-    'data:image/svg+xml;charset=utf-8,' +
-    encodeURIComponent(
-      svgHeatmap
-    );
+  const svgUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgHeatmap);
+  const imageOverlay = L.imageOverlay(svgUrl, bounds, {
+    opacity: 0.85,
+    interactive: false
+  });
 
-  const imageOverlay =
-    L.imageOverlay(
-      svgUrl,
-      bounds,
-      {
-        opacity: 0.85,
-        interactive: false
-      }
-    );
-
-  rasterHeatmapGroup.addLayer(
-    imageOverlay
-  );
+  rasterHeatmapGroup.addLayer(imageOverlay);
 }
 
-// 8. Master Render: Boundaries, Polygons, Single Aizawl ESP Marker & Saved Reports
+// =========================================================================
+// 8. Master Render: Boundaries, Polygons, Stations & Saved Reports
+// =========================================================================
 
 function renderAllNEROverview() {
-
   stateLayerGroup.clearLayers();
   zoneLayerGroup.clearLayers();
   hardwareMarkerGroup.clearLayers();
   citizenMarkerGroup.clearLayers();
 
-  renderDendriticRidgeHeatmap();
+  Object.keys(nerData).forEach(stateKey => {
+    const state = nerData[stateKey];
+    if (state.boundary) {
+      const poly = L.polygon(state.boundary, {
+        opacity: 0,
+        fillOpacity: 0
+      });
 
-  Object.keys(nerData).forEach(
-    stateKey => {
+      poly.bindTooltip(`<b>${state.name}</b><br/>Regional Landslide Watch Zone`);
+      poly.on('click', () => {
+        stateSelect.value = stateKey;
+        populateDistricts(stateKey);
+        map.flyTo(state.center, state.zoom);
+      });
 
-      const state =
-        nerData[stateKey];
-
-      if (state.boundary) {
-
-        const poly =
-          L.polygon(
-            state.boundary,
-            {
-              color: '#dc2626',
-              weight: 1.5,
-              opacity: 0.65,
-              fillColor: '#ea580c',
-              fillOpacity: 0.08,
-              dashArray: '3, 4'
-            }
-          );
-
-        poly.bindTooltip(
-          `<b>${state.name}</b><br/>Regional Landslide Watch Zone`
-        );
-
-        poly.on(
-          'click',
-          () => {
-            stateSelect.value =
-              stateKey;
-
-            populateDistricts(
-              stateKey
-            );
-
-            map.flyTo(
-              state.center,
-              state.zoom
-            );
-          }
-        );
-
-        stateLayerGroup.addLayer(
-          poly
-        );
-      }
-
-      // Local hazard polygons intentionally disabled.
+      stateLayerGroup.addLayer(poly);
     }
-  );
+  });
 
-  // ONLY 1 PHYSICAL ESP MARKER: Aizawl, Mizoram
+  const aizawlDist = nerData.mizoram.districts.aizawl;
+  const espIcon = L.divIcon({
+    html: `<div style="background: #7c3aed; border: 2.5px solid white; width: 16px; height: 16px; border-radius: 50%; box-shadow: 0 0 10px rgba(124, 58, 237, 0.85); cursor: pointer;"></div>`,
+    iconSize: [16, 16]
+  });
 
-  const aizawlDist =
-    nerData
-      .mizoram
-      .districts
-      .aizawl;
+  const singleEspMarker = L.marker(aizawlDist.sensorCoords, { icon: espIcon });
+  singleEspMarker.bindTooltip("<b>STAGE DEMONSTRATION NODE</b><br/>Aizawl ESP32 Edge Station (Live Telemetry)", { permanent: false });
+  singleEspMarker.on('click', () => {
+    stateSelect.value = 'mizoram';
+    populateDistricts('mizoram');
+    districtSelect.value = 'aizawl';
+    updateDistrictView('mizoram', 'aizawl');
+  });
 
-  const espIcon =
-    L.divIcon({
-      html:
-        `<div style="background: #7c3aed; border: 2.5px solid white; width: 16px; height: 16px; border-radius: 50%; box-shadow: 0 0 10px rgba(124, 58, 237, 0.85); cursor: pointer;"></div>`,
-      iconSize: [16, 16]
+  hardwareMarkerGroup.addLayer(singleEspMarker);
+
+  seedCitizenReports.forEach(rep => {
+    const citIcon = L.divIcon({
+      html: `<div style="background: #0284c7; border: 2px solid white; width: 14px; height: 14px; border-radius: 3px; box-shadow: 0 0 6px rgba(0,0,0,0.3);"></div>`,
+      iconSize: [14, 14]
     });
 
-  const singleEspMarker =
-    L.marker(
-      aizawlDist.sensorCoords,
-      {
-        icon: espIcon
-      }
-    );
-
-  singleEspMarker.bindTooltip(
-    "<b>STAGE DEMONSTRATION NODE</b><br/>Aizawl ESP32 Edge Station (Live Telemetry)",
-    {
-      permanent: false
-    }
-  );
-
-  singleEspMarker.on(
-    'click',
-    () => {
-
-      stateSelect.value =
-        'mizoram';
-
-      populateDistricts(
-        'mizoram'
-      );
-
-      districtSelect.value =
-        'aizawl';
-
-      updateDistrictView(
-        'mizoram',
-        'aizawl'
-      );
-    }
-  );
-
-  hardwareMarkerGroup.addLayer(
-    singleEspMarker
-  );
-
-  // Render Pre-Seeded Citizen Field Reports
-
-  seedCitizenReports.forEach(
-    rep => {
-
-      const citIcon =
-        L.divIcon({
-          html:
-            `<div style="background: #0284c7; border: 2px solid white; width: 14px; height: 14px; border-radius: 3px; box-shadow: 0 0 6px rgba(0,0,0,0.3);"></div>`,
-          iconSize: [14, 14]
-        });
-
-      const marker =
-        L.marker(
-          rep.coords,
-          {
-            icon: citIcon
-          }
-        );
-
-      marker.bindPopup(
-        `<b>Citizen Field Incident</b><br/>` +
-        `<b>Type:</b> ${rep.type}<br/>` +
-        `<b>Location:</b> ${rep.place}<br/>` +
-        `<i>"${rep.text}"</i>`
-      );
-
-      citizenMarkerGroup.addLayer(
-        marker
-      );
-    }
-  );
+    const marker = L.marker(rep.coords, { icon: citIcon });
+    marker.bindPopup(`
+      <b>Citizen Field Incident</b><br/>
+      <b>Type:</b> ${rep.type}<br/>
+      <b>Location:</b> ${rep.place}<br/>
+      <i>"${rep.text}"</i>
+    `);
+    citizenMarkerGroup.addLayer(marker);
+  });
 
   loadSavedCitizenReports();
-
   resetOverviewSidebar();
+  updateRoutesToAvoidView();
 
-  if (
-    backendRiskZones.length > 0
-  ) {
-    renderBackendRiskZones(
-      backendRiskZones
-    );
+  if (backendRiskZones.length > 0) {
+    renderBackendRiskZones(backendRiskZones);
   }
 }
 
 function resetOverviewSidebar() {
-
   selectedBackendZoneId = null;
   telemetryViewMode = 'overview';
 
-  document.getElementById(
-    'data-source-tag'
-  ).innerText =
-    "REGIONAL MODEL";
+  const sourceTag = document.getElementById('data-source-tag');
+  const riskBadge = document.getElementById('risk-badge');
+  const distTitle = document.getElementById('district-alert-title');
+  const distBody = document.getElementById('district-alert-body');
+  const alertBox = document.getElementById('district-alert-box');
+  const cardTitle = document.getElementById('telemetry-card-title');
+  const sourceDesc = document.getElementById('telemetry-source-desc');
+  const hwBadge = document.getElementById('hardware-badge');
 
-  document.getElementById(
-    'data-source-tag'
-  ).classList.remove(
-    'hardware'
-  );
+  if (sourceTag) {
+    sourceTag.innerText = "REGIONAL MODEL";
+    sourceTag.classList.remove('hardware');
+  }
+  if (riskBadge) {
+    riskBadge.className = 'badge blue';
+    riskBadge.innerText = 'OVERVIEW';
+  }
+  if (distTitle) distTitle.innerText = "North Eastern Region (NER)";
+  if (distBody) distBody.innerText = "Surveillance active across 8 NER states. Select Aizawl to inspect the deployed physical ESP32 edge telemetry.";
+  if (alertBox) alertBox.style.borderLeftColor = '#0284c7';
+  if (cardTitle) cardTitle.innerText = "IoT Edge Telemetry";
+  if (sourceDesc) sourceDesc.innerText = "Data Source: Regional Meteorological Model";
+  if (hwBadge) {
+    hwBadge.className = 'badge gray';
+    hwBadge.innerText = 'MODEL DATA';
+  }
 
-  document.getElementById(
-    'risk-badge'
-  ).className =
-    'badge blue';
+  const elTilt = document.getElementById('val-tilt');
+  const elMoist = document.getElementById('val-moisture');
+  const elRain = document.getElementById('val-rain');
 
-  document.getElementById(
-    'risk-badge'
-  ).innerText =
-    'OVERVIEW';
-
-  document.getElementById(
-    'district-alert-title'
-  ).innerText =
-    "North Eastern Region (NER)";
-
-  document.getElementById(
-    'district-alert-body'
-  ).innerText =
-    "Surveillance active across 8 NER states. Select Aizawl to inspect the deployed physical ESP32 edge telemetry.";
-
-  document.getElementById(
-    'district-alert-box'
-  ).style.borderLeftColor =
-    '#0284c7';
-
-  document.getElementById(
-    'telemetry-card-title'
-  ).innerText =
-    "IoT Edge Telemetry";
-
-  document.getElementById(
-    'telemetry-source-desc'
-  ).innerText =
-    "Data Source: Regional Meteorological Model";
-
-  document.getElementById(
-    'hardware-badge'
-  ).className =
-    'badge gray';
-
-  document.getElementById(
-    'hardware-badge'
-  ).innerText =
-    'MODEL DATA';
-
-  // Overview must not display a random/previous sensor reading.
-  document.getElementById(
-    'val-tilt'
-  ).innerText =
-    '—';
-
-  document.getElementById(
-    'val-moisture'
-  ).innerText =
-    '—';
-
-  document.getElementById(
-    'val-rain'
-  ).innerText =
-    '—';
+  if (elTilt) elTilt.innerText = '—';
+  if (elMoist) elMoist.innerText = '—';
+  if (elRain) elRain.innerText = '—';
 }
 
 function updateBackendZoneView(zone) {
+  selectedBackendZoneId = zone.zone_id;
+  telemetryViewMode = 'ml-zone';
 
-  selectedBackendZoneId =
-    zone.zone_id;
+  const score = Number(zone.risk_score || 0);
+  const level = String(zone.risk_level || 'unknown');
 
-  telemetryViewMode =
-    'ml-zone';
+  const sourceTag = document.getElementById('data-source-tag');
+  const hwBadge = document.getElementById('hardware-badge');
+  const cardTitle = document.getElementById('telemetry-card-title');
+  const sourceDesc = document.getElementById('telemetry-source-desc');
 
-  const score =
-    Number(
-      zone.risk_score || 0
-    );
+  map.flyTo([Number(zone.lat), Number(zone.lon)], 11, { duration: 1.2 });
 
-  const level =
-    String(
-      zone.risk_level || 'unknown'
-    );
+  if (sourceTag) {
+    sourceTag.innerText = 'LIVE ML BACKEND';
+    sourceTag.classList.remove('hardware');
+  }
+  if (cardTitle) cardTitle.innerText = `${zone.zone_id} — ML Risk Zone`;
+  if (sourceDesc) sourceDesc.innerText = 'Data Source: FastAPI + Validated ML Fusion Pipeline';
+  if (hwBadge) {
+    hwBadge.className = 'badge blue';
+    hwBadge.innerText = 'BACKEND DATA';
+  }
 
-  const sourceTag =
-    document.getElementById(
-      'data-source-tag'
-    );
+  const elTilt = document.getElementById('val-tilt');
+  const elMoist = document.getElementById('val-moisture');
+  const elRain = document.getElementById('val-rain');
 
-  const hwBadge =
-    document.getElementById(
-      'hardware-badge'
-    );
-
-  const cardTitle =
-    document.getElementById(
-      'telemetry-card-title'
-    );
-
-  const sourceDesc =
-    document.getElementById(
-      'telemetry-source-desc'
-    );
-
-  map.flyTo(
-    [
-      Number(zone.lat),
-      Number(zone.lon)
-    ],
-    11,
-    {
-      duration: 1.2
-    }
-  );
-
-  sourceTag.innerText =
-    'LIVE ML BACKEND';
-
-  sourceTag.classList.remove(
-    'hardware'
-  );
-
-  cardTitle.innerText =
-    `${zone.zone_id} — ML Risk Zone`;
-
-  sourceDesc.innerText =
-    'Data Source: FastAPI + Validated ML Fusion Pipeline';
-
-  hwBadge.className =
-    'badge blue';
-
-  hwBadge.innerText =
-    'BACKEND DATA';
-
-  document.getElementById(
-    'val-tilt'
-  ).innerText =
-    '—';
-
-  document.getElementById(
-    'val-moisture'
-  ).innerText =
-    '—';
-
-  document.getElementById(
-    'val-rain'
-  ).innerText =
-    '—';
+  if (elTilt) elTilt.innerText = '—';
+  if (elMoist) elMoist.innerText = '—';
+  if (elRain) elRain.innerText = '—';
 
   const shapZone = {
-
-    name:
-      zone.zone_id,
-
-    riskScore:
-      score.toFixed(1),
-
-    riskLevel:
-      level,
-
-    why:
-      'Risk score generated by the backend ML fusion pipeline. ' +
-      'The factors below are the model features with the strongest SHAP contribution.',
-
-    shap:
-      (zone.top_factors || [])
-        .map(
-          f => ({
-            factor:
-              f.feature,
-
-            impact:
-              Number(
-                f.abs_shap ||
-                Math.abs(
-                  f.shap_value || 0
-                )
-              ),
-
-            shap_value:
-              Number(
-                f.shap_value || 0
-              ),
-
-            direction:
-              f.direction
-          })
-        )
+    name: zone.zone_id,
+    riskScore: score.toFixed(1),
+    riskLevel: level,
+    why: 'Risk score generated by the backend ML fusion pipeline. The factors below are the model features with the strongest SHAP contribution.',
+    shap: (zone.top_factors || []).map(f => ({
+      factor: f.feature,
+      impact: Number(f.abs_shap || Math.abs(f.shap_value || 0)),
+      shap_value: Number(f.shap_value || 0),
+      direction: f.direction
+    }))
   };
 
-  updateShapPanel(
-    shapZone,
-    zone.zone_id
-  );
-
-  loadLatestSensorTelemetryForZone(
-    zone.zone_id
-  );
+  updateShapPanel(shapZone, zone.zone_id);
+  loadLatestSensorTelemetryForZone(zone.zone_id);
 }
 
 // 9. Update View on District Selection
-
-async function updateDistrictView(
-  stateKey,
-  distKey
-) {
-
+async function updateDistrictView(stateKey, distKey) {
   selectedBackendZoneId = null;
 
-  const state =
-    nerData[stateKey];
+  const state = nerData[stateKey];
+  if (!state) return;
+  const dist = state.districts[distKey];
+  if (!dist) return;
 
-  if (!state) {
-    return;
-  }
+  map.flyTo(dist.center, dist.zoom, { duration: 1.2 });
 
-  const dist =
-    state.districts[distKey];
+  const isHardware = !!dist.isHardwareNode;
+  telemetryViewMode = isHardware ? 'hardware' : 'model';
 
-  if (!dist) {
-    return;
-  }
+  const sourceTag = document.getElementById('data-source-tag');
+  const hwBadge = document.getElementById('hardware-badge');
+  const cardTitle = document.getElementById('telemetry-card-title');
+  const sourceDesc = document.getElementById('telemetry-source-desc');
 
-  map.flyTo(
-    dist.center,
-    dist.zoom,
-    {
-      duration: 1.2
+  if (isHardware) {
+    if (sourceTag) {
+      sourceTag.innerText = "LIVE ESP32 DEPLOYMENT";
+      sourceTag.classList.add('hardware');
     }
-  );
-
-  const isHardware =
-    !!dist.isHardwareNode;
-
-  telemetryViewMode =
-    isHardware
-      ? 'hardware'
-      : 'model';
-
-  const sourceTag =
-    document.getElementById(
-      'data-source-tag'
-    );
-
-  const hwBadge =
-    document.getElementById(
-      'hardware-badge'
-    );
-
-  const cardTitle =
-    document.getElementById(
-      'telemetry-card-title'
-    );
-
-  const sourceDesc =
-    document.getElementById(
-      'telemetry-source-desc'
-    );
-
-  if (isHardware) {
-
-    sourceTag.innerText =
-      "LIVE ESP32 DEPLOYMENT";
-
-    sourceTag.classList.add(
-      'hardware'
-    );
-
-    cardTitle.innerText =
-      "Aizawl — ESP32 Edge Station";
-
-    sourceDesc.innerText =
-      "Waiting for physical ESP32 telemetry...";
-
-    hwBadge.className =
-      'badge purple';
-
-    hwBadge.innerText =
-      'LIVE HARDWARE';
-
+    if (cardTitle) cardTitle.innerText = "Aizawl — ESP32 Edge Station";
+    if (sourceDesc) sourceDesc.innerText = "Waiting for physical ESP32 telemetry...";
+    if (hwBadge) {
+      hwBadge.className = 'badge purple';
+      hwBadge.innerText = 'LIVE HARDWARE';
+    }
   } else {
-
-    sourceTag.innerText =
-      "LIVE OPEN-METEO & GIS MODEL";
-
-    sourceTag.classList.remove(
-      'hardware'
-    );
-
-    cardTitle.innerText =
-      `${dist.name} — Live Feeds`;
-
-    sourceDesc.innerText =
-      "Data Source: Live IMD/Open-Meteo Satellite Precipitation";
-
-    hwBadge.className =
-      'badge gray';
-
-    hwBadge.innerText =
-      'LIVE MODEL';
+    if (sourceTag) {
+      sourceTag.innerText = "LIVE OPEN-METEO & GIS MODEL";
+      sourceTag.classList.remove('hardware');
+    }
+    if (cardTitle) cardTitle.innerText = `${dist.name} — Live Feeds`;
+    if (sourceDesc) sourceDesc.innerText = "Data Source: Live IMD/Open-Meteo Satellite Precipitation";
+    if (hwBadge) {
+      hwBadge.className = 'badge gray';
+      hwBadge.innerText = 'LIVE MODEL';
+    }
   }
 
-  // Display telemetry metrics
+  const elTilt = document.getElementById('val-tilt');
+  const elMoist = document.getElementById('val-moisture');
+  const elRain = document.getElementById('val-rain');
 
   if (isHardware) {
-
-    // Never show fabricated hardware values.
-    document.getElementById(
-      'val-tilt'
-    ).innerText =
-      '—';
-
-    document.getElementById(
-      'val-moisture'
-    ).innerText =
-      '—';
-
-    document.getElementById(
-      'val-rain'
-    ).innerText =
-      '—';
-
+    if (elTilt) elTilt.innerText = '—';
+    if (elMoist) elMoist.innerText = '—';
+    if (elRain) elRain.innerText = '—';
   } else {
-
-    document.getElementById(
-      'val-tilt'
-    ).innerText =
-      `${dist.telemetry.tilt}°`;
-
-    document.getElementById(
-      'val-moisture'
-    ).innerText =
-      `${dist.telemetry.moisture}%`;
-
-    document.getElementById(
-      'val-rain'
-    ).innerText =
-      `${dist.telemetry.rain} mm`;
+    if (elTilt) elTilt.innerText = `${dist.telemetry.tilt}°`;
+    if (elMoist) elMoist.innerText = `${dist.telemetry.moisture}%`;
+    if (elRain) elRain.innerText = `${dist.telemetry.rain} mm`;
   }
-
-  // Synchronize Line Chart
 
   if (telemetryChart) {
-
     if (isHardware) {
-
-      telemetryChart.data.datasets[0].data = [
-        null,
-        null,
-        null,
-        null,
-        null,
-        null
-      ];
-
-      telemetryChart.data.datasets[1].data = [
-        null,
-        null,
-        null,
-        null,
-        null,
-        null
-      ];
-
+      telemetryChart.data.datasets[0].data = [null, null, null, null, null, null];
+      telemetryChart.data.datasets[1].data = [null, null, null, null, null, null];
     } else {
-
-      const baseTilt =
-        dist.telemetry.tilt;
-
-      const baseM =
-        dist.telemetry.moisture;
-
+      const baseTilt = dist.telemetry.tilt;
+      const baseM = dist.telemetry.moisture;
       telemetryChart.data.datasets[0].data = [
-        Math.max(
-          0,
-          baseTilt - 1.2
-        ),
-        Math.max(
-          0,
-          baseTilt - 1.0
-        ),
-        Math.max(
-          0,
-          baseTilt - 0.7
-        ),
-        Math.max(
-          0,
-          baseTilt - 0.4
-        ),
-        Math.max(
-          0,
-          baseTilt - 0.2
-        ),
+        Math.max(0, baseTilt - 1.2),
+        Math.max(0, baseTilt - 1.0),
+        Math.max(0, baseTilt - 0.7),
+        Math.max(0, baseTilt - 0.4),
+        Math.max(0, baseTilt - 0.2),
         baseTilt
       ];
 
@@ -1859,1092 +1028,756 @@ async function updateDistrictView(
         baseM
       ];
     }
-
     telemetryChart.update();
   }
 
-  document.getElementById(
-    'district-alert-title'
-  ).innerText =
-    dist.alertTitle;
+  const alertTitleEl = document.getElementById('district-alert-title');
+  const alertBodyEl = document.getElementById('district-alert-body');
+  const riskBadge = document.getElementById('risk-badge');
+  const alertBox = document.getElementById('district-alert-box');
 
-  document.getElementById(
-    'district-alert-body'
-  ).innerText =
-    dist.alertText;
+  if (alertTitleEl) alertTitleEl.innerText = dist.alertTitle;
+  if (alertBodyEl) alertBodyEl.innerText = dist.alertText;
 
-  const riskBadge =
-    document.getElementById(
-      'risk-badge'
-    );
+  const color = getHazardColor(dist.riskScore);
+  if (riskBadge) {
+    riskBadge.innerText = dist.riskLevel.toUpperCase();
+    riskBadge.style.backgroundColor = color;
+    riskBadge.style.color = '#fff';
+  }
+  if (alertBox) alertBox.style.borderLeftColor = color;
 
-  riskBadge.innerText =
-    dist.riskLevel.toUpperCase();
-
-  const color =
-    getHazardColor(
-      dist.riskScore
-    );
-
-  riskBadge.style.backgroundColor =
-    color;
-
-  riskBadge.style.color =
-    '#fff';
-
-  document.getElementById(
-    'district-alert-box'
-  ).style.borderLeftColor =
-    color;
-
-  if (
-    dist.zones.length > 0
-  ) {
-
-    updateShapPanel(
-      dist.zones[0],
-      dist.name
-    );
+  if (dist.zones && dist.zones.length > 0) {
+    updateShapPanel(dist.zones[0], dist.name);
   }
 
   if (isHardware) {
-
     loadLatestSensorTelemetry();
   }
 }
 
 // 10. Explainable AI (SHAP) Panel
+function updateShapPanel(zone, districtName = "") {
+  const zoneNameEl = document.getElementById('selected-zone-name');
+  if (zoneNameEl) {
+    zoneNameEl.innerText = `${districtName ? districtName + ': ' : ''}${zone.name}`;
+  }
 
-function updateShapPanel(
-  zone,
-  districtName = ""
-) {
+  const panel = document.getElementById('shap-details');
+  if (!panel) return;
 
-  document.getElementById(
-    'selected-zone-name'
-  ).innerText =
-    `${
-      districtName
-        ? districtName + ': '
-        : ''
-    }${zone.name}`;
+  const color = getHazardColor(zone.riskScore);
+  const factorsHtml = (zone.shap || [])
+    .map(item => {
+      const isPositive = item.impact > 0;
+      const barWidth = Math.min(Math.abs(item.impact) * 160, 100);
 
-  const panel =
-    document.getElementById(
-      'shap-details'
-    );
-
-  const color =
-    getHazardColor(
-      zone.riskScore
-    );
-
-  let factorsHtml =
-    zone.shap
-      .map(
-        item => {
-
-          const isPositive =
-            item.impact > 0;
-
-          const barWidth =
-            Math.min(
-              Math.abs(
-                item.impact
-              ) * 160,
-              100
-            );
-
-          return `
-            <div class="shap-bar-item">
-              <div class="shap-label-row">
-                <span style="color: #334155;">
-                  ${item.factor}
-                </span>
-
-                <span style="color: ${color}; font-weight: bold;">
-                  ${
-                    isPositive
-                      ? '+'
-                      : ''
-                  }${(
-                    item.impact * 100
-                  ).toFixed(0)}%
-                </span>
-              </div>
-
-              <div class="shap-progress-track">
-                <div
-                  class="shap-progress-fill"
-                  style="width: ${barWidth}%; background-color: ${color}"
-                ></div>
-              </div>
-            </div>
-          `;
-        }
-      )
-      .join('');
-
-  panel.innerHTML =
-    `
-      <div class="shap-summary-card">
-
-        <div class="shap-summary-top">
-
-          <div>
-
-            <span
-              style="
-                font-size: 0.68rem;
-                color: #64748b;
-                font-weight: 700;
-              "
-            >
-              CALCULATED FAILURE PROBABILITY
+      return `
+        <div class="shap-bar-item">
+          <div class="shap-label-row">
+            <span style="color: #334155;">${item.factor}</span>
+            <span style="color: ${color}; font-weight: bold;">
+              ${isPositive ? '+' : ''}${(item.impact * 100).toFixed(0)}%
             </span>
-
-            <div
-              class="shap-score-val"
-              style="color: ${color};"
-            >
-              ${zone.riskScore}%
-              [
-              ${zone.riskLevel.toUpperCase()}
-              ]
-            </div>
-
           </div>
+          <div class="shap-progress-track">
+            <div class="shap-progress-fill" style="width: ${barWidth}%; background-color: ${color}"></div>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
 
-          <span class="badge blue">
-            Model: RF + SHAP
+  panel.innerHTML = `
+    <div class="shap-summary-card">
+      <div class="shap-summary-top">
+        <div>
+          <span style="font-size: 0.68rem; color: #64748b; font-weight: 700;">
+            CALCULATED FAILURE PROBABILITY
           </span>
-
+          <div class="shap-score-val" style="color: ${color};">
+            ${zone.riskScore}% [ ${zone.riskLevel.toUpperCase()} ]
+          </div>
         </div>
-
-        <div class="shap-why-box">
-
-          <strong>
-            Why is this slope at risk?
-          </strong>
-
-          <br/>
-
-          ${
-            zone.why ||
-            "Multiple geotechnical factors combined with sustained precipitation."
-          }
-
-        </div>
-
+        <span class="badge blue">Model: RF + SHAP</span>
       </div>
-
-      ${factorsHtml}
-    `;
+      <div class="shap-why-box">
+        <strong>Why is this slope at risk?</strong><br/>
+        ${zone.why || "Multiple geotechnical factors combined with sustained precipitation."}
+      </div>
+    </div>
+    ${factorsHtml}
+  `;
 }
 
 // 11. Cascading Dropdown Controls
+const stateSelect = document.getElementById('state-select');
+const districtSelect = document.getElementById('district-select');
 
-const stateSelect =
-  document.getElementById(
-    'state-select'
-  );
+function populateDistricts(selectedState) {
+  if (!districtSelect) return;
+  districtSelect.innerHTML = '<option value="">-- Select District --</option>';
 
-const districtSelect =
-  document.getElementById(
-    'district-select'
-  );
-
-function populateDistricts(
-  selectedState
-) {
-
-  districtSelect.innerHTML =
-    '<option value="">-- Select District --</option>';
-
-  if (
-    !selectedState ||
-    !nerData[selectedState]
-  ) {
-
-    districtSelect.disabled =
-      true;
-
+  if (!selectedState || !nerData[selectedState]) {
+    districtSelect.disabled = true;
     return;
   }
 
-  const dists =
-    nerData[
-      selectedState
-    ].districts;
+  const dists = nerData[selectedState].districts;
+  Object.keys(dists).forEach(distKey => {
+    const opt = document.createElement('option');
+    opt.value = distKey;
+    opt.innerText =
+      dists[distKey].name +
+      (dists[distKey].isHardwareNode
+        ? " 🟣 [Live ESP32 Station]"
+        : " (Live Weather Model)");
+    districtSelect.appendChild(opt);
+  });
 
-  Object.keys(dists).forEach(
-    distKey => {
-
-      const opt =
-        document.createElement(
-          'option'
-        );
-
-      opt.value =
-        distKey;
-
-      opt.innerText =
-        dists[
-          distKey
-        ].name +
-        (
-          dists[
-            distKey
-          ].isHardwareNode
-            ? " 🟣 [Live ESP32 Station]"
-            : " (Live Weather Model)"
-        );
-
-      districtSelect.appendChild(
-        opt
-      );
-    }
-  );
-
-  districtSelect.disabled =
-    false;
+  districtSelect.disabled = false;
 }
 
-stateSelect.addEventListener(
-  'change',
-  e => {
+if (stateSelect) {
+  stateSelect.addEventListener('change', e => {
+    selectedBackendZoneId = null;
+    telemetryViewMode = 'overview';
 
-    selectedBackendZoneId =
-      null;
-
-    telemetryViewMode =
-      'overview';
-
-    const selectedState =
-      e.target.value;
+    const selectedState = e.target.value;
 
     if (!selectedState) {
-
-      districtSelect.innerHTML =
-        '<option value="">-- Select District --</option>';
-
-      districtSelect.disabled =
-        true;
-
-      map.flyTo(
-        NER_CENTER,
-        NER_DEFAULT_ZOOM
-      );
-
+      if (districtSelect) {
+        districtSelect.innerHTML = '<option value="">-- Select District --</option>';
+        districtSelect.disabled = true;
+      }
+      map.flyTo(NER_CENTER, NER_DEFAULT_ZOOM);
       renderAllNEROverview();
-
       return;
     }
 
-    populateDistricts(
-      selectedState
-    );
+    populateDistricts(selectedState);
+    map.flyTo(nerData[selectedState].center, nerData[selectedState].zoom);
+  });
+}
 
-    map.flyTo(
-      nerData[
-        selectedState
-      ].center,
+if (districtSelect) {
+  districtSelect.addEventListener('change', e => {
+    const selectedDist = e.target.value;
+    const selectedState = stateSelect ? stateSelect.value : null;
 
-      nerData[
-        selectedState
-      ].zoom
-    );
-  }
-);
-
-districtSelect.addEventListener(
-  'change',
-  e => {
-
-    const selectedDist =
-      e.target.value;
-
-    const selectedState =
-      stateSelect.value;
-
-    if (
-      selectedDist &&
-      selectedState
-    ) {
-
-      updateDistrictView(
-        selectedState,
-        selectedDist
-      );
+    if (selectedDist && selectedState) {
+      updateDistrictView(selectedState, selectedDist);
     }
-  }
-);
+  });
+}
 
-document.getElementById(
-  'btn-reset-view'
-).addEventListener(
-  'click',
-  () => {
+const btnResetView = document.getElementById('btn-reset-view');
+if (btnResetView) {
+  btnResetView.addEventListener('click', () => {
+    selectedBackendZoneId = null;
+    telemetryViewMode = 'overview';
 
-    selectedBackendZoneId =
-      null;
+    if (stateSelect) stateSelect.value = "";
+    if (districtSelect) {
+      districtSelect.innerHTML = '<option value="">-- Select District --</option>';
+      districtSelect.disabled = true;
+    }
 
-    telemetryViewMode =
-      'overview';
-
-    stateSelect.value =
-      "";
-
-    districtSelect.innerHTML =
-      '<option value="">-- Select District --</option>';
-
-    districtSelect.disabled =
-      true;
-
-    map.flyTo(
-      NER_CENTER,
-      NER_DEFAULT_ZOOM
-    );
-
+    map.flyTo(NER_CENTER, NER_DEFAULT_ZOOM);
     renderAllNEROverview();
-  }
-);
+  });
+}
 
-// 12. Alert Preview & Dispatch Trigger
+// 12. Alert Preview & Dispatch Trigger (SMS API Route)
+const langSelect = document.getElementById('lang-select');
+if (langSelect) {
+  langSelect.addEventListener('change', e => {
+    const lang = e.target.value;
+    const alertPreview = document.getElementById('alert-preview-text');
+    if (alertPreview) alertPreview.innerText = `"${translations[lang]}"`;
+  });
+}
 
-document.getElementById(
-  'lang-select'
-).addEventListener(
-  'change',
-  e => {
+const btnTriggerAlert = document.getElementById('btn-trigger-alert');
+if (btnTriggerAlert) {
+  btnTriggerAlert.addEventListener('click', async () => {
+    const lang = langSelect ? langSelect.value : 'en';
 
-    const lang =
-      e.target.value;
+    try {
+      const response = await fetch(`${getApiBase()}/api/trigger-alert`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          zone_id: 'ESP32_01',
+          risk_level: 'critical',
+          message: translations[lang]
+        })
+      });
 
-    document.getElementById(
-      'alert-preview-text'
-    ).innerText =
-      `"${translations[lang]}"`;
-  }
-);
+      const result = await response.json();
+      if (!response.ok || !result.sms_result?.success) {
+        throw new Error(result.sms_result?.error || 'SMS failed');
+      }
 
-// This remains the existing demo/manual dispatch UI.
-// Actual automatic SMS integration is being handled separately.
-document.getElementById('btn-trigger-alert').addEventListener('click', async () => {
-  const lang = document.getElementById('lang-select').value;
+      alert('Emergency SMS transmitted successfully.');
+    } catch (error) {
+      console.error('Emergency SMS error:', error);
+      alert(`Emergency SMS failed: ${error.message}`);
+    }
+  });
+}
 
+// =========================================================================
+// 13. High-Precision Named Road Resolution Engine (Overpass API + Fallback)
+// =========================================================================
+
+async function getAreaNameFromCoords(lat, lng) {
+  // 1. Direct query to OSM Overpass API to extract highway & street names within 1000 meters
   try {
-    const response = await fetch(`${getApiBase()}/api/trigger-alert`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        zone_id: 'ESP32_01',
-        risk_level: 'critical',
-        message: translations[lang]
-      })
+    const overpassQuery = `
+      [out:json][timeout:5];
+      way(around:1000,${lat},${lng})[highway][name];
+      out tags 5;
+    `;
+    const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
+    
+    const res = await fetch(overpassUrl);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.elements && data.elements.length > 0) {
+        const roadNames = [];
+        data.elements.forEach(el => {
+          const name = el.tags?.name || el.tags?.ref;
+          if (name && !roadNames.includes(name)) {
+            roadNames.push(name);
+          }
+        });
+
+        if (roadNames.length > 0) {
+          return roadNames.slice(0, 2).join(' / ');
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Overpass Road Search] Road network query failed, falling back...', err);
+  }
+
+  // 2. Secondary fallback: Query OSM Nominatim reverse geocode
+  try {
+    const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`;
+    const res = await fetch(nominatimUrl, {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const addr = data.address || {};
+      const road = addr.road || addr.highway || addr.pedestrian || addr.street;
+      const suburb = addr.suburb || addr.neighbourhood || addr.village || addr.city_district || addr.town;
+      
+      if (road && suburb) return `${road}, ${suburb}`;
+      if (road) return road;
+      if (suburb) return `${suburb} Corridor`;
+      if (data.name) return data.name;
+    }
+  } catch (e) {
+    console.warn('[Nominatim Fallback Failed]', e);
+  }
+
+  // 3. Known Geographical Highway Fallbacks for NER coordinates
+  if (lat >= 23.6 && lat <= 23.85 && lng >= 92.65 && lng <= 92.8) return "NH-54 / Aizawl Bypass Arteries";
+  if (lat >= 25.8 && lat <= 26.0 && lng >= 93.6 && lng <= 93.9) return "NH-29 (Dimapur-Kohima Gorge Corridor)";
+  if (lat >= 25.6 && lat <= 25.75 && lng >= 94.05 && lng <= 94.2) return "NH-02 / Kohima Bypass Link";
+  if (lat >= 27.25 && lat <= 27.45 && lng >= 88.55 && lng <= 88.65) return "NH-10 / Gangtok-Siliguri Highway";
+
+  return "Regional Arterial Corridor";
+}
+
+// =========================================================================
+// 14. Citizen Field Incident & Routes to Avoid Sync Engine
+// =========================================================================
+
+function renderCitizenMarker(lat, lng, type, desc, image, shouldFly, id, reporter, locationName) {
+  const validLat = parseFloat(lat);
+  const validLng = parseFloat(lng);
+
+  if (isNaN(validLat) || isNaN(validLng) || typeof citizenMarkerGroup === 'undefined') return;
+
+  const role = sessionStorage.getItem('userRole');
+  const currentUserId = sessionStorage.getItem('userId');
+  const isOfficial = role === 'official';
+  const isAuthor = role === 'citizen' && reporter && currentUserId && reporter === currentUserId;
+  const canDelete = isOfficial || isAuthor;
+
+  const citIcon = L.divIcon({
+    html: `<div style="background: #0284c7; border: 2px solid white; width: 14px; height: 14px; border-radius: 3px; box-shadow: 0 0 6px rgba(0,0,0,0.4); cursor: pointer;"></div>`,
+    iconSize: [14, 14]
+  });
+
+  const marker = L.marker([validLat, validLng], { icon: citIcon });
+
+  const popupContent = `
+    <div style="min-width: 200px; font-family: system-ui, sans-serif; font-size: 12px;">
+      <div style="font-weight: 700; color: #ef4444; margin-bottom: 4px;">⚠️ Citizen Hazard Report</div>
+      ${locationName ? `<div><b>Location:</b> ${locationName}</div>` : ''}
+      <div><b>Type:</b> ${type}</div>
+      ${desc ? `<div style="margin: 4px 0; color: #475569; font-style: italic;">"${desc}"</div>` : ''}
+      ${reporter ? `<div style="font-size: 11px; color: #64748b;">Reported by: ${reporter}</div>` : ''}
+      ${image ? `<img src="${image}" style="width: 100%; height: 90px; object-fit: cover; border-radius: 4px; margin-top: 6px;" />` : ''}
+      ${
+        canDelete && id
+          ? `
+        <button type="button" onclick="window.deleteCitizenReport('${id}')" 
+          style="margin-top: 8px; width: 100%; background: #ef4444; color: #fff; border: none; border-radius: 4px; padding: 6px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+          🗑️ Delete Pin ${isOfficial ? '(Official Override)' : ''}
+        </button>
+      `
+          : ''
+      }
+    </div>
+  `;
+
+  marker.bindPopup(popupContent);
+  citizenMarkerGroup.addLayer(marker);
+
+  if (shouldFly && typeof map !== 'undefined' && map) {
+    map.flyTo([validLat, validLng], 13, { duration: 1.5 });
+    setTimeout(() => {
+      marker.openPopup();
+    }, 1600);
+  }
+}
+
+window.deleteCitizenReport = function(reportId) {
+  if (!confirm('Are you sure you want to remove this citizen incident report?')) return;
+
+  let reports = JSON.parse(localStorage.getItem('giri_citizen_reports') || '[]');
+  reports = reports.filter(r => String(r.id) !== String(reportId));
+  localStorage.setItem('giri_citizen_reports', JSON.stringify(reports));
+
+  loadSavedCitizenReports();
+};
+
+window.clearAllCitizenReports = function() {
+  if (!confirm('Remove all citizen incident pins from the map?')) return;
+  localStorage.removeItem('giri_citizen_reports');
+  loadSavedCitizenReports();
+};
+
+function loadSavedCitizenReports() {
+  try {
+    if (typeof citizenMarkerGroup !== 'undefined') {
+      citizenMarkerGroup.clearLayers();
+    }
+
+    let storedReports = JSON.parse(localStorage.getItem('giri_citizen_reports') || '[]');
+    const isRedirect = sessionStorage.getItem('just_reported') === 'true';
+
+    let hasMissingIds = false;
+    storedReports = storedReports.map((r, idx) => {
+      if (!r.id) {
+        r.id = 'cit_' + (r.timestamp ? new Date(r.timestamp).getTime() : Date.now()) + '_' + idx;
+        hasMissingIds = true;
+      }
+      return r;
     });
 
-    const result = await response.json();
-
-    if (!response.ok || !result.sms_result?.success) {
-      throw new Error(result.sms_result?.error || 'SMS failed');
+    if (hasMissingIds) {
+      localStorage.setItem('giri_citizen_reports', JSON.stringify(storedReports));
     }
 
-    alert('Emergency SMS transmitted successfully.');
-  } catch (error) {
-    console.error('Emergency SMS error:', error);
-    alert(`Emergency SMS failed: ${error.message}`);
+    storedReports.forEach((r, idx) => {
+      const lat = r.lat || r.latitude;
+      const lng = r.lng || r.lon || r.longitude;
+      const type = r.type || r.hazard_type || "Ground Incident";
+      const desc = r.desc || r.description || "";
+      const isLatest = idx === storedReports.length - 1;
+      const locationName = r.location || r.place || null;
+
+      renderCitizenMarker(
+        lat,
+        lng,
+        type,
+        desc,
+        r.image,
+        isLatest && isRedirect,
+        r.id,
+        r.reporter,
+        locationName
+      );
+    });
+
+    sessionStorage.removeItem('just_reported');
+
+    renderCitizenReportsSidebarList();
+    updateRoutesToAvoidView();
+  } catch (err) {
+    console.warn('[Citizen Sync] Local reports load failed:', err);
   }
-});
+}
 
-// =========================================================================
-// 13. Citizen Field Incident Sync Engine (Listens to report.html)
-// =========================================================================
+function renderCitizenReportsSidebarList() {
+  const role = sessionStorage.getItem('userRole');
+  const currentUserId = sessionStorage.getItem('userId');
+  const reports = JSON.parse(localStorage.getItem('giri_citizen_reports') || '[]');
 
-function renderCitizenMarker(
-  lat,
-  lng,
-  hazardType,
-  description,
-  imageBase64,
-  flyTo = false
-) {
+  const citizenCard = document.getElementById('citizen-reports-manage-card');
+  const citizenList = document.getElementById('citizen-reports-list');
+  const citizenCount = document.getElementById('citizen-report-count');
+  const officialList = document.getElementById('official-reports-list');
 
-  const validLat =
-    parseFloat(lat);
+  // 1. Citizen Role View
+  if (role === 'citizen') {
+    if (citizenCard) citizenCard.style.display = 'block';
+    const myReports = reports.filter(r => r.reporter && currentUserId && r.reporter === currentUserId);
+    if (citizenCount) citizenCount.innerText = `${myReports.length} PINS`;
 
-  const validLng =
-    parseFloat(lng);
+    if (citizenList) {
+      if (myReports.length === 0) {
+        citizenList.innerHTML = '<p style="color: #94a3b8; font-size: 12px; margin: 0;">No active incident reports filed by you.</p>';
+      } else {
+        citizenList.innerHTML = myReports
+          .map(
+            r => `
+          <div style="background: #0f172a; border-left: 3px solid #0284c7; padding: 8px 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <div style="max-width: 80%;">
+              <strong style="font-size: 12px; color: #f8fafc;">${r.type || r.hazard_type || 'Incident'}</strong>
+              <div style="font-size: 11px; color: #cbd5e1; margin-top: 1px;">📍 ${r.location || r.place || 'Field Zone'}</div>
+              <div style="font-size: 11px; color: #94a3b8; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${r.desc || r.description || 'No description'}</div>
+            </div>
+            <button type="button" onclick="window.deleteCitizenReport('${r.id}')" style="background: #ef4444; color: #fff; border: none; border-radius: 4px; padding: 3px 6px; font-size: 11px; font-weight: bold; cursor: pointer;">✕</button>
+          </div>
+        `
+          )
+          .join('');
+      }
+    }
+  } else {
+    if (citizenCard) citizenCard.style.display = 'none';
+  }
 
-  if (
-    isNaN(validLat) ||
-    isNaN(validLng)
-  ) {
+  // 2. Official Role View
+  if (role === 'official' && officialList) {
+    if (reports.length === 0) {
+      officialList.innerHTML = '<p style="color: #94a3b8; font-size: 12px; margin: 0;">No citizen field pins active on map.</p>';
+    } else {
+      officialList.innerHTML = reports
+        .map(
+          r => `
+        <div style="background: #1e293b; border: 1px solid #334155; border-left: 3px solid #38bdf8; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="max-width: 75%;">
+            <strong style="font-size: 12px; font-weight: 700; color: #f8fafc; letter-spacing: 0.2px;">${r.type || r.hazard_type || 'Incident'}</strong>
+            <div style="font-size: 11px; color: #38bdf8; margin-top: 2px;">📍 ${r.location || r.place || 'Field Sector'}</div>
+            <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">By: <span style="color: #cbd5e1;">${r.reporter || 'Field Citizen'}</span></div>
+            ${(r.desc || r.description) ? `<div style="font-size: 11px; color: #64748b; margin-top: 4px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${r.desc || r.description}</div>` : ''}
+          </div>
+          <button type="button" onclick="window.deleteCitizenReport('${r.id}')" 
+            style="background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 5px; padding: 5px 10px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s ease;">
+            ✕ Delete
+          </button>
+        </div>
+      `
+        )
+        .join('');
+    }
+  }
+}
 
-    console.warn(
-      '[Citizen Sync] Invalid coordinates received:',
-      lat,
-      lng
-    );
+// 1 KM HAZARD BUFFER & AVOID ROUTES SYSTEM (WITH REAL OVERPASS HIGHWAYS)
+async function updateRoutesToAvoidView() {
+  if (typeof avoidZonesGroup === 'undefined' || !avoidZonesGroup) return;
+  avoidZonesGroup.clearLayers();
 
+  const container = document.getElementById('avoid-routes-list');
+  const countBadge = document.getElementById('avoid-corridors-count');
+
+  let reports = [];
+  try {
+    reports = JSON.parse(localStorage.getItem('giri_citizen_reports') || '[]');
+  } catch (e) {
+    reports = [];
+  }
+
+  if (countBadge) {
+    countBadge.innerText = `${reports.length} RESTRICTION${reports.length === 1 ? '' : 'S'}`;
+  }
+
+  if (!container) return;
+
+  if (reports.length === 0) {
+    container.innerHTML = `
+      <p style="color: #94a3b8; font-size: 12px; margin: 0; padding: 4px;">
+        All primary arterial corridors are currently open and clear.
+      </p>
+    `;
     return;
   }
 
-  const citIcon =
-    L.divIcon({
-      html:
-        `<div style="background: #0284c7; border: 2.5px solid white; width: 16px; height: 16px; border-radius: 4px; box-shadow: 0 0 10px rgba(2,132,199,0.85); cursor:pointer;"></div>`,
-      iconSize: [16, 16]
+  // Draw 1 km exclusion buffer circles around incident coordinates
+  reports.forEach(r => {
+    const lat = parseFloat(r.lat || r.latitude);
+    const lng = parseFloat(r.lng || r.lon || r.longitude);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    const bufferCircle = L.circle([lat, lng], {
+      radius: 1000,
+      color: '#dc2626',
+      weight: 2,
+      dashArray: '5, 6',
+      fillColor: '#ef4444',
+      fillOpacity: 0.18,
+      interactive: true
     });
 
-  const marker =
-    L.marker(
-      [
-        validLat,
-        validLng
-      ],
-      {
-        icon: citIcon
-      }
-    );
+    const areaTitle = r.location || r.place || 'Hazard Zone';
+    bufferCircle.bindTooltip(`<b>⚠️ Caution: 1 km Exclusion Zone</b><br>${areaTitle}. Avoid surrounding roads.`);
+    avoidZonesGroup.addLayer(bufferCircle);
+  });
 
-  const imgHtml =
-    imageBase64
-      ? `
-        <div style="margin-top:6px;">
-          <img
-            src="${imageBase64}"
-            style="
-              width:100%;
-              height:110px;
-              object-fit:cover;
-              border-radius:6px;
-              display:block;
-            "
-            alt="Field Photo"
-          />
+  // Resolve real road names asynchronously and render cards
+  let updatedStorage = false;
+  const listItems = await Promise.all(reports.map(async (r, idx) => {
+    const latNum = parseFloat(r.lat || r.latitude);
+    const lngNum = parseFloat(r.lng || r.lon || r.longitude);
+    const type = r.type || r.hazard_type || 'Hazard Surface Incident';
+
+    // If report has no saved road name or has generic fallback text, query real corridors
+    if (!r.location || r.location.startsWith('Zone') || r.location.startsWith('Local Arterial') || r.location === 'Field Zone') {
+      r.location = await getAreaNameFromCoords(latNum, lngNum);
+      reports[idx].location = r.location;
+      updatedStorage = true;
+    }
+
+    const roadName = r.location;
+
+    return `
+      <div style="background: var(--panel-bg, #ffffff); border: 1px solid var(--panel-border, #e2e8f0); border-left: 4px solid #dc2626; border-radius: 6px; padding: 8px 10px; cursor: pointer; margin-bottom: 6px;"
+           onclick="window.focusAvoidZone(${latNum}, ${lngNum})">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong style="font-size: 12px; color: #dc2626;">🚫 Avoid 1 km Perimeter</strong>
+          <span style="font-size: 10px; color: #64748b; font-weight: 600;">Sector #${idx + 1}</span>
         </div>
-      `
-      : '';
-
-  marker.bindPopup(
-    `
-      <div
-        style="
-          min-width: 180px;
-          max-width: 220px;
-        "
-      >
-
-        <span
-          class="badge blue"
-          style="
-            margin-bottom: 4px;
-            display:inline-block;
-            font-size:0.65rem;
-            padding:2px 6px;
-            border-radius:3px;
-            background:#e0f2fe;
-            color:#0369a1;
-            font-weight:bold;
-          "
-        >
-          GROUND CITIZEN REPORT
-        </span>
-
-        <h4
-          style="
-            font-size: 0.86rem;
-            color: #0f172a;
-            margin: 0;
-          "
-        >
-          ${hazardType}
-        </h4>
-
-        <p
-          style="
-            font-size: 0.76rem;
-            color: #475569;
-            margin: 4px 0 6px;
-          "
-        >
-          "${description}"
-        </p>
-
-        ${imgHtml}
-
-        <small
-          style="
-            color: #94a3b8;
-            font-size: 0.65rem;
-            display:block;
-            margin-top:4px;
-          "
-        >
-          GPS:
-          ${validLat.toFixed(4)},
-          ${validLng.toFixed(4)}
-        </small>
-
+        <div style="font-size: 12px; font-weight: 700; color: var(--text-main, #0f172a); margin-top: 3px;">
+          🛣️ ${roadName}
+        </div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+          Hazard: ${type}
+        </div>
       </div>
-    `
-  );
+    `;
+  }));
 
-  citizenMarkerGroup.addLayer(
-    marker
-  );
-
-  if (flyTo) {
-
-    map.flyTo(
-      [
-        validLat,
-        validLng
-      ],
-      Math.max(
-        map.getZoom(),
-        13
-      ),
-      {
-        duration: 1.0
-      }
-    );
-
-    setTimeout(
-      () => {
-        marker.openPopup();
-      },
-      1100
-    );
+  if (updatedStorage) {
+    localStorage.setItem('giri_citizen_reports', JSON.stringify(reports));
   }
+
+  container.innerHTML = listItems.join('');
 }
 
-// Load and display all reports saved in localStorage
-
-function loadSavedCitizenReports() {
-
-  try {
-
-    const storedReports =
-      JSON.parse(
-        localStorage.getItem(
-          'giri_citizen_reports'
-        ) || '[]'
-      );
-
-    const isRedirect =
-      sessionStorage.getItem(
-        'just_reported'
-      ) === 'true';
-
-    storedReports.forEach(
-      (r, idx) => {
-
-        const lat =
-          r.lat ||
-          r.latitude;
-
-        const lng =
-          r.lng ||
-          r.lon ||
-          r.longitude;
-
-        const type =
-          r.type ||
-          r.hazard_type ||
-          "Ground Incident";
-
-        const desc =
-          r.desc ||
-          r.description ||
-          "";
-
-        const isLatest =
-          idx ===
-          storedReports.length - 1;
-
-        renderCitizenMarker(
-          lat,
-          lng,
-          type,
-          desc,
-          r.image,
-          isLatest &&
-          isRedirect
-        );
-      }
-    );
-
-    sessionStorage.removeItem(
-      'just_reported'
-    );
-
-  } catch (err) {
-
-    console.warn(
-      '[Citizen Sync] Local reports load failed:',
-      err
-    );
+window.focusAvoidZone = function(lat, lng) {
+  const vLat = parseFloat(lat);
+  const vLng = parseFloat(lng);
+  if (typeof map !== 'undefined' && map && Number.isFinite(vLat) && Number.isFinite(vLng)) {
+    map.flyTo([vLat, vLng], 14, { duration: 1.2 });
   }
-}
+};
 
 // Live Multi-Tab Sync
+window.addEventListener('storage', e => {
+  if (e.key === 'giri_latest_report' && e.newValue) {
+    try {
+      const r = JSON.parse(e.newValue);
+      const lat = parseFloat(r.lat || r.latitude);
+      const lng = parseFloat(r.lng || r.lon || r.longitude);
+      const type = r.type || r.hazard_type || "Ground Incident";
+      const desc = r.desc || r.description || "";
+      const loc = r.location || r.place || null;
 
-window.addEventListener(
-  'storage',
-  e => {
+      renderCitizenMarker(lat, lng, type, desc, r.image, true, r.id, r.reporter, loc);
 
-    if (
-      e.key === 'giri_latest_report' &&
-      e.newValue
-    ) {
-
-      try {
-
-        const r =
-          JSON.parse(
-            e.newValue
-          );
-
-        const lat =
-          r.lat ||
-          r.latitude;
-
-        const lng =
-          r.lng ||
-          r.lon ||
-          r.longitude;
-
-        const type =
-          r.type ||
-          r.hazard_type ||
-          "Ground Incident";
-
-        const desc =
-          r.desc ||
-          r.description ||
-          "";
-
-        renderCitizenMarker(
-          lat,
-          lng,
-          type,
-          desc,
-          r.image,
-          true
-        );
-
-      } catch (err) {
-
-        console.warn(
-          '[Citizen Sync] Invalid report payload:',
-          err
-        );
+      let reports = JSON.parse(localStorage.getItem('giri_citizen_reports') || '[]');
+      const exists = reports.some(existing => existing.id && r.id && existing.id === r.id);
+      if (!exists) {
+        reports.push(r);
+        localStorage.setItem('giri_citizen_reports', JSON.stringify(reports));
       }
+
+      updateRoutesToAvoidView();
+      renderCitizenReportsSidebarList();
+    } catch (err) {
+      console.warn('[Citizen Sync] Invalid report payload:', err);
     }
   }
-);
 
-// 14. Global Search & Autocomplete
+  if (e.key === 'giri_alerts') {
+    renderAlertsFeed();
+  }
+});
 
-const searchInput =
-  document.getElementById(
-    'global-search-input'
-  );
-
-const searchDropdown =
-  document.getElementById(
-    'search-suggestions'
-  );
-
-const searchClearBtn =
-  document.getElementById(
-    'search-clear-btn'
-  );
+// 15. Global Search & Autocomplete
+const searchInput = document.getElementById('global-search-input');
+const searchDropdown = document.getElementById('search-suggestions');
+const searchClearBtn = document.getElementById('search-clear-btn');
 
 function buildLocationIndex() {
-
   const index = [];
 
-  Object.entries(
-    nerData
-  ).forEach(
-    ([sKey, state]) => {
+  Object.entries(nerData).forEach(([sKey, state]) => {
+    index.push({
+      type: 'state',
+      name: state.name,
+      subText: 'NER State Overview',
+      center: state.center,
+      zoom: state.zoom,
+      stateKey: sKey
+    });
 
+    Object.entries(state.districts).forEach(([dKey, dist]) => {
       index.push({
-
-        type:
-          'state',
-
-        name:
-          state.name,
-
-        subText:
-          'NER State Overview',
-
-        center:
-          state.center,
-
-        zoom:
-          state.zoom,
-
-        stateKey:
-          sKey
+        type: dist.isHardwareNode ? 'hardware' : 'district',
+        name: dist.name,
+        subText: dist.isHardwareNode
+          ? `Physical ESP32 Station, ${state.name}`
+          : `Live Weather Model, ${state.name}`,
+        center: dist.center,
+        zoom: dist.zoom,
+        stateKey: sKey,
+        districtKey: dKey
       });
 
-      Object.entries(
-        state.districts
-      ).forEach(
-        ([dKey, dist]) => {
+      (dist.zones || []).forEach(zone => {
+        const midLat =
+          zone.polygon.reduce((sum, p) => sum + p[0], 0) / zone.polygon.length;
+        const midLng =
+          zone.polygon.reduce((sum, p) => sum + p[1], 0) / zone.polygon.length;
 
-          index.push({
-
-            type:
-              dist.isHardwareNode
-                ? 'hardware'
-                : 'district',
-
-            name:
-              dist.name,
-
-            subText:
-              dist.isHardwareNode
-                ? `Physical ESP32 Station, ${state.name}`
-                : `Live Weather Model, ${state.name}`,
-
-            center:
-              dist.center,
-
-            zoom:
-              dist.zoom,
-
-            stateKey:
-              sKey,
-
-            districtKey:
-              dKey
-          });
-
-          dist.zones.forEach(
-            zone => {
-
-              const midLat =
-                zone.polygon.reduce(
-                  (
-                    sum,
-                    p
-                  ) =>
-                    sum + p[0],
-                  0
-                ) /
-                zone.polygon.length;
-
-              const midLng =
-                zone.polygon.reduce(
-                  (
-                    sum,
-                    p
-                  ) =>
-                    sum + p[1],
-                  0
-                ) /
-                zone.polygon.length;
-
-              index.push({
-
-                type:
-                  'zone',
-
-                name:
-                  zone.name,
-
-                subText:
-                  `Slope Cut, ${dist.name}`,
-
-                center:
-                  [
-                    midLat,
-                    midLng
-                  ],
-
-                zoom:
-                  14,
-
-                stateKey:
-                  sKey,
-
-                districtKey:
-                  dKey,
-
-                zoneData:
-                  zone
-              });
-            }
-          );
-        }
-      );
-    }
-  );
+        index.push({
+          type: 'zone',
+          name: zone.name,
+          subText: `Slope Cut, ${dist.name}`,
+          center: [midLat, midLng],
+          zoom: 14,
+          stateKey: sKey,
+          districtKey: dKey,
+          zoneData: zone
+        });
+      });
+    });
+  });
 
   return index;
 }
 
-const locationIndex =
-  buildLocationIndex();
+const locationIndex = buildLocationIndex();
 
 function closeSearchSuggestions() {
-
-  searchDropdown.classList.add(
-    'hidden'
-  );
-
-  searchDropdown.innerHTML =
-    '';
+  if (searchDropdown) {
+    searchDropdown.classList.add('hidden');
+    searchDropdown.innerHTML = '';
+  }
 }
 
-searchInput.addEventListener(
-  'input',
-  e => {
-
-    const q =
-      e.target.value
-        .trim()
-        .toLowerCase();
+if (searchInput) {
+  searchInput.addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
 
     if (!q) {
-
       closeSearchSuggestions();
-
-      searchClearBtn.classList.add(
-        'hidden'
-      );
-
+      if (searchClearBtn) searchClearBtn.classList.add('hidden');
       return;
     }
 
-    searchClearBtn.classList.remove(
-      'hidden'
-    );
+    if (searchClearBtn) searchClearBtn.classList.remove('hidden');
 
-    const matches =
-      locationIndex
-        .filter(
-          item =>
-            item.name
-              .toLowerCase()
-              .includes(q) ||
-            item.subText
-              .toLowerCase()
-              .includes(q)
-        )
-        .slice(
-          0,
-          7
-        );
-
-    if (
-      matches.length === 0
-    ) {
-
-      searchDropdown.innerHTML =
-        `
-          <div
-            class="search-suggestion-item"
-            style="
-              cursor: default;
-              color: #94a3b8;
-            "
-          >
-            No matching locations found
-          </div>
-        `;
-
-      searchDropdown.classList.remove(
-        'hidden'
-      );
-
-      return;
-    }
-
-    searchDropdown.innerHTML =
-      matches
-        .map(
-          (
-            item,
-            idx
-          ) =>
-            `
-              <div
-                class="search-suggestion-item"
-                data-idx="${idx}"
-              >
-
-                <div
-                  class="suggestion-info"
-                >
-
-                  <span
-                    class="suggestion-title"
-                  >
-                    ${item.name}
-                  </span>
-
-                  <span
-                    class="suggestion-sub"
-                  >
-                    ${item.subText}
-                  </span>
-
-                </div>
-
-                <span
-                  class="suggestion-badge ${item.type}"
-                >
-                  ${item.type}
-                </span>
-
-              </div>
-            `
-        )
-        .join('');
-
-    searchDropdown
-      .querySelectorAll(
-        '.search-suggestion-item'
+    const matches = locationIndex
+      .filter(
+        item =>
+          item.name.toLowerCase().includes(q) ||
+          item.subText.toLowerCase().includes(q)
       )
-      .forEach(
-        (
-          el,
-          i
-        ) => {
+      .slice(0, 7);
 
-          el.addEventListener(
-            'click',
-            () =>
-              handleLocationSelect(
-                matches[i]
-              )
-          );
-        }
-      );
+    if (matches.length === 0) {
+      searchDropdown.innerHTML = `
+        <div class="search-suggestion-item" style="cursor: default; color: #94a3b8;">
+          No matching locations found
+        </div>
+      `;
+      searchDropdown.classList.remove('hidden');
+      return;
+    }
 
-    searchDropdown.classList.remove(
-      'hidden'
-    );
-  }
-);
+    searchDropdown.innerHTML = matches
+      .map(
+        (item, idx) => `
+        <div class="search-suggestion-item" data-idx="${idx}">
+          <div class="suggestion-info">
+            <span class="suggestion-title">${item.name}</span>
+            <span class="suggestion-sub">${item.subText}</span>
+          </div>
+          <span class="suggestion-badge ${item.type}">${item.type}</span>
+        </div>
+      `
+      )
+      .join('');
 
-function handleLocationSelect(
-  loc
-) {
+    searchDropdown.querySelectorAll('.search-suggestion-item').forEach((el, i) => {
+      el.addEventListener('click', () => handleLocationSelect(matches[i]));
+    });
 
-  searchInput.value =
-    loc.name;
+    searchDropdown.classList.remove('hidden');
+  });
+}
 
+function handleLocationSelect(loc) {
+  if (searchInput) searchInput.value = loc.name;
   closeSearchSuggestions();
 
-  if (
-    loc.type === 'state'
-  ) {
-
-    stateSelect.value =
-      loc.stateKey;
-
-    populateDistricts(
-      loc.stateKey
-    );
-
-    map.flyTo(
-      loc.center,
-      loc.zoom,
-      {
-        duration: 1.2
-      }
-    );
-
+  if (loc.type === 'state') {
+    if (stateSelect) stateSelect.value = loc.stateKey;
+    populateDistricts(loc.stateKey);
+    map.flyTo(loc.center, loc.zoom, { duration: 1.2 });
   } else if (
     loc.type === 'district' ||
     loc.type === 'hardware' ||
     loc.type === 'zone'
   ) {
+    if (stateSelect) stateSelect.value = loc.stateKey;
+    populateDistricts(loc.stateKey);
+    if (districtSelect) districtSelect.value = loc.districtKey;
 
-    stateSelect.value =
-      loc.stateKey;
+    updateDistrictView(loc.stateKey, loc.districtKey);
 
-    populateDistricts(
-      loc.stateKey
-    );
-
-    districtSelect.value =
-      loc.districtKey;
-
-    updateDistrictView(
-      loc.stateKey,
-      loc.districtKey
-    );
-
-    if (
-      loc.type === 'zone'
-    ) {
-
-      map.flyTo(
-        loc.center,
-        loc.zoom,
-        {
-          duration: 1.2
-        }
-      );
-
-      updateShapPanel(
-        loc.zoneData,
-        loc.name
-      );
+    if (loc.type === 'zone') {
+      map.flyTo(loc.center, loc.zoom, { duration: 1.2 });
+      updateShapPanel(loc.zoneData, loc.name);
     }
   }
 }
 
-searchClearBtn.addEventListener(
-  'click',
-  () => {
-
-    searchInput.value =
-      '';
-
-    closeSearchSuggestions();
-
-    searchClearBtn.classList.add(
-      'hidden'
-    );
-
-    searchInput.focus();
-  }
-);
-
-document.addEventListener(
-  'click',
-  e => {
-
-    if (
-      !e.target.closest(
-        '.nav-search-container'
-      )
-    ) {
-
-      closeSearchSuggestions();
+if (searchClearBtn) {
+  searchClearBtn.addEventListener('click', () => {
+    if (searchInput) {
+      searchInput.value = '';
+      searchInput.focus();
     }
-  }
-);
+    closeSearchSuggestions();
+    searchClearBtn.classList.add('hidden');
+  });
+}
 
-map.on(
-  'click dragstart',
-  closeSearchSuggestions
-);
+document.addEventListener('click', e => {
+  if (!e.target.closest('.nav-search-container')) {
+    closeSearchSuggestions();
+  }
+});
+
+map.on('click dragstart', closeSearchSuggestions);
 
 // ============================================================
-// LIVE SENSOR ALERT MONITOR
+// LIVE SENSOR ALERT MONITOR (ESP32 Live Stream)
 // ============================================================
 
 let latestSeenAlertId = 0;
@@ -2952,678 +1785,510 @@ let liveAlertPollTimer = null;
 let liveAlertMonitorInitialized = false;
 
 function ensureLiveSensorAlertUI() {
+  if (document.getElementById('live-sensor-alert')) return;
 
-  if (
-    document.getElementById(
-      'live-sensor-alert'
-    )
-  ) {
-    return;
-  }
-
-  const styleId =
-    'live-sensor-alert-runtime-style';
-
-  if (
-    !document.getElementById(
-      styleId
-    )
-  ) {
-
-    const style =
-      document.createElement(
-        'style'
-      );
-
-    style.id =
-      styleId;
-
-    style.textContent =
-      `
-        .live-sensor-alert {
-          position: fixed;
-          top: 82px;
-          right: 24px;
-          width: min(
-            390px,
-            calc(100vw - 32px)
-          );
-
-          display: flex;
-          align-items: flex-start;
-
-          gap: 12px;
-
-          padding: 16px 18px;
-
-          background: #ffffff;
-
-          border: 2px solid #dc2626;
-          border-left: 6px solid #dc2626;
-
-          border-radius: 12px;
-
-          box-shadow:
-            0 12px 30px rgba(
-              0,
-              0,
-              0,
-              .18
-            ),
-            0 0 0 4px rgba(
-              220,
-              38,
-              38,
-              .08
-            );
-
-          z-index: 99999;
-
-          animation:
-            liveAlertIn
-            .28s
-            ease-out;
-        }
-
-        .live-sensor-alert.hidden {
-          display: none;
-        }
-
-        .live-alert-icon {
-          font-size: 27px;
-          line-height: 1;
-          margin-top: 2px;
-        }
-
-        .live-alert-content {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .live-alert-title {
-          font-size: .72rem;
-          font-weight: 800;
-          letter-spacing: .08em;
-          color: #b91c1c;
-          margin-bottom: 4px;
-        }
-
-        .live-alert-zone {
-          font-size: 1rem;
-          font-weight: 800;
-          color: #111827;
-          margin-bottom: 4px;
-        }
-
-        .live-alert-message {
-          font-size: .85rem;
-          line-height: 1.4;
-          color: #374151;
-        }
-
-        .live-alert-reading {
-          margin-top: 8px;
-          font-size: .78rem;
-          font-weight: 700;
-          color: #991b1b;
-        }
-
-        .live-alert-time {
-          margin-top: 7px;
-          font-size: .72rem;
-          color: #6b7280;
-        }
-
-        .live-alert-close {
-          border: 0;
-          background: transparent;
-          color: #6b7280;
-          font-size: 24px;
-          line-height: 1;
-          cursor: pointer;
-          padding: 0 2px;
-        }
-
-        .live-alert-close:hover {
-          color: #111827;
-        }
-
-        @keyframes liveAlertIn {
-
-          from {
-            opacity: 0;
-            transform:
-              translateY(-12px)
-              translateX(12px);
-          }
-
-          to {
-            opacity: 1;
-            transform:
-              translateY(0)
-              translateX(0);
-          }
-        }
-
-        @media (
-          max-width: 700px
-        ) {
-
-          .live-sensor-alert {
-            top: 70px;
-            right: 12px;
-            width:
-              calc(100vw - 24px);
-          }
-        }
-      `;
-
-    document.head.appendChild(
-      style
-    );
-  }
-
-  const alertBox =
-    document.createElement(
-      'div'
-    );
-
-  alertBox.id =
-    'live-sensor-alert';
-
-  alertBox.className =
-    'live-sensor-alert hidden';
-
-  alertBox.innerHTML =
-    `
-      <div class="live-alert-icon">
-        🚨
-      </div>
-
-      <div class="live-alert-content">
-
-        <div
-          class="live-alert-title"
-        >
-          LIVE SENSOR ALERT
-        </div>
-
-        <div
-          id="live-alert-zone"
-          class="live-alert-zone"
-        >
-          ESP32 Edge Node
-        </div>
-
-        <div
-          id="live-alert-message"
-          class="live-alert-message"
-        >
-          Reactive safety threshold exceeded.
-        </div>
-
-        <div
-          id="live-alert-reading"
-          class="live-alert-reading"
-        ></div>
-
-        <div
-          id="live-alert-time"
-          class="live-alert-time"
-        >
-          Detected just now
-        </div>
-
-      </div>
-
-      <button
-        id="live-alert-close"
-        class="live-alert-close"
-        aria-label="Close alert"
-      >
-        ×
-      </button>
+  const styleId = 'live-sensor-alert-runtime-style';
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      .live-sensor-alert {
+        position: fixed;
+        top: 82px;
+        right: 24px;
+        width: min(390px, calc(100vw - 32px));
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px 18px;
+        background: #ffffff;
+        border: 2px solid #dc2626;
+        border-left: 6px solid #dc2626;
+        border-radius: 12px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, .18), 0 0 0 4px rgba(220, 38, 38, .08);
+        z-index: 99999;
+        animation: liveAlertIn .28s ease-out;
+      }
+      .live-sensor-alert.hidden { display: none; }
+      .live-alert-icon { font-size: 27px; line-height: 1; margin-top: 2px; }
+      .live-alert-content { flex: 1; min-width: 0; }
+      .live-alert-title { font-size: .72rem; font-weight: 800; letter-spacing: .08em; color: #b91c1c; margin-bottom: 4px; }
+      .live-alert-zone { font-size: 1rem; font-weight: 800; color: #111827; margin-bottom: 4px; }
+      .live-alert-message { font-size: .85rem; line-height: 1.4; color: #374151; }
+      .live-alert-reading { margin-top: 8px; font-size: .78rem; font-weight: 700; color: #991b1b; }
+      .live-alert-time { margin-top: 7px; font-size: .72rem; color: #6b7280; }
+      .live-alert-close { border: 0; background: transparent; color: #6b7280; font-size: 24px; line-height: 1; cursor: pointer; padding: 0 2px; }
+      .live-alert-close:hover { color: #111827; }
+      @keyframes liveAlertIn {
+        from { opacity: 0; transform: translateY(-12px) translateX(12px); }
+        to { opacity: 1; transform: translateY(0) translateX(0); }
+      }
+      @media (max-width: 700px) {
+        .live-sensor-alert { top: 70px; right: 12px; width: calc(100vw - 24px); }
+      }
     `;
+    document.head.appendChild(style);
+  }
 
-  document.body.appendChild(
-    alertBox
-  );
+  const alertBox = document.createElement('div');
+  alertBox.id = 'live-sensor-alert';
+  alertBox.className = 'live-sensor-alert hidden';
+  alertBox.innerHTML = `
+    <div class="live-alert-icon">🚨</div>
+    <div class="live-alert-content">
+      <div class="live-alert-title">LIVE SENSOR ALERT</div>
+      <div id="live-alert-zone" class="live-alert-zone">ESP32 Edge Node</div>
+      <div id="live-alert-message" class="live-alert-message">Reactive safety threshold exceeded.</div>
+      <div id="live-alert-reading" class="live-alert-reading"></div>
+      <div id="live-alert-time" class="live-alert-time">Detected just now</div>
+    </div>
+    <button id="live-alert-close" class="live-alert-close" aria-label="Close alert">×</button>
+  `;
 
-  document.getElementById(
-    'live-alert-close'
-  ).addEventListener(
-    'click',
-    () => {
-      hideLiveSensorAlert();
-    }
-  );
+  document.body.appendChild(alertBox);
+  document.getElementById('live-alert-close').addEventListener('click', hideLiveSensorAlert);
 }
 
-function showLiveSensorAlert(
-  alert,
-  reading = null
-) {
-
+function showLiveSensorAlert(alert, reading = null) {
   ensureLiveSensorAlertUI();
 
-  const alertBox =
-    document.getElementById(
-      'live-sensor-alert'
-    );
+  const alertBox = document.getElementById('live-sensor-alert');
+  const zoneEl = document.getElementById('live-alert-zone');
+  const messageEl = document.getElementById('live-alert-message');
+  const readingEl = document.getElementById('live-alert-reading');
+  const timeEl = document.getElementById('live-alert-time');
 
-  const zoneEl =
-    document.getElementById(
-      'live-alert-zone'
-    );
+  if (!alertBox || !zoneEl || !messageEl || !readingEl || !timeEl) return;
 
-  const messageEl =
-    document.getElementById(
-      'live-alert-message'
-    );
-
-  const readingEl =
-    document.getElementById(
-      'live-alert-reading'
-    );
-
-  const timeEl =
-    document.getElementById(
-      'live-alert-time'
-    );
-
-  if (
-    !alertBox ||
-    !zoneEl ||
-    !messageEl ||
-    !readingEl ||
-    !timeEl
-  ) {
-    return;
-  }
-
-  const zoneId =
-    alert.zone_id ||
-    alert.sensor_id ||
-    'ESP32 Edge Node';
-
-  zoneEl.innerText =
-    `${zoneId} — Reactive Safety Alert`;
-
-  messageEl.innerText =
-    alert.message ||
-    'Reactive safety threshold exceeded.';
+  const zoneId = alert.zone_id || alert.sensor_id || 'ESP32 Edge Node';
+  zoneEl.innerText = `${zoneId} — Reactive Safety Alert`;
+  messageEl.innerText = alert.message || 'Reactive safety threshold exceeded.';
 
   if (reading) {
-
-    const tilt =
-      Number(
-        reading.tilt_deg
-      );
-
-    const moisture =
-      Number(
-        reading.moisture_pct
-      );
-
+    const tilt = Number(reading.tilt_deg);
+    const moisture = Number(reading.moisture_pct);
     const parts = [];
 
-    if (
-      Number.isFinite(
-        tilt
-      )
-    ) {
+    if (Number.isFinite(tilt)) parts.push(`Tilt ${tilt.toFixed(1)}°`);
+    if (Number.isFinite(moisture)) parts.push(`Moisture ${moisture.toFixed(1)}%`);
 
-      parts.push(
-        `Tilt ${tilt.toFixed(1)}°`
-      );
+    readingEl.innerText = parts.length ? parts.join('  •  ') : '';
+    latestSensorReading = reading;
+
+    if (zoneId === 'ESP32_01') {
+      telemetryViewMode = 'hardware';
+      selectedBackendZoneId = null;
+
+      const sourceTag = document.getElementById('data-source-tag');
+      const cardTitle = document.getElementById('telemetry-card-title');
+      const sourceDesc = document.getElementById('telemetry-source-desc');
+      const hwBadge = document.getElementById('hardware-badge');
+      const elTilt = document.getElementById('val-tilt');
+      const elMoist = document.getElementById('val-moisture');
+      const elRain = document.getElementById('val-rain');
+
+      if (sourceTag) {
+        sourceTag.innerText = 'LIVE ESP32 DEPLOYMENT';
+        sourceTag.classList.add('hardware');
+      }
+      if (cardTitle) cardTitle.innerText = 'ESP32_01 — ESP32 Edge Telemetry';
+      if (sourceDesc) sourceDesc.innerText = `Data Source: Physical ESP32 Sensor • Updated ${formatSensorTime(reading.timestamp)}`;
+      if (hwBadge) {
+        hwBadge.className = 'badge purple';
+        hwBadge.innerText = 'LIVE HARDWARE';
+      }
+      if (elTilt) elTilt.innerText = Number.isFinite(tilt) ? `${tilt.toFixed(1)}°` : '—';
+      if (elMoist) elMoist.innerText = Number.isFinite(moisture) ? `${moisture.toFixed(1)}%` : '—';
+      if (elRain) elRain.innerText = '—';
     }
-
-    if (
-      Number.isFinite(
-        moisture
-      )
-    ) {
-
-      parts.push(
-        `Moisture ${moisture.toFixed(1)}%`
-      );
-    }
-
-    readingEl.innerText =
-      parts.length
-        ? parts.join(
-            '  •  '
-          )
-        : '';
-
-    latestSensorReading =
-      reading;
-
-    // When the real ESP32 triggers an alert,
-    // immediately show physical telemetry.
-    if (
-      zoneId ===
-      'ESP32_01'
-    ) {
-
-      telemetryViewMode =
-        'hardware';
-
-      selectedBackendZoneId =
-        null;
-
-      document.getElementById(
-        'data-source-tag'
-      ).innerText =
-        'LIVE ESP32 DEPLOYMENT';
-
-      document.getElementById(
-        'data-source-tag'
-      ).classList.add(
-        'hardware'
-      );
-
-      document.getElementById(
-        'telemetry-card-title'
-      ).innerText =
-        'ESP32_01 — ESP32 Edge Telemetry';
-
-      document.getElementById(
-        'telemetry-source-desc'
-      ).innerText =
-        `Data Source: Physical ESP32 Sensor • Updated ${formatSensorTime(reading.timestamp)}`;
-
-      document.getElementById(
-        'hardware-badge'
-      ).className =
-        'badge purple';
-
-      document.getElementById(
-        'hardware-badge'
-      ).innerText =
-        'LIVE HARDWARE';
-
-      document.getElementById(
-        'val-tilt'
-      ).innerText =
-        Number.isFinite(
-          tilt
-        )
-          ? `${tilt.toFixed(1)}°`
-          : '—';
-
-      document.getElementById(
-        'val-moisture'
-      ).innerText =
-        Number.isFinite(
-          moisture
-        )
-          ? `${moisture.toFixed(1)}%`
-          : '—';
-
-      document.getElementById(
-        'val-rain'
-      ).innerText =
-        '—';
-    }
-
   } else {
-
-    readingEl.innerText =
-      '';
+    readingEl.innerText = '';
   }
 
-  timeEl.innerText =
-    alert.timestamp
-      ? `Detected: ${formatSensorTime(alert.timestamp)}`
-      : 'Detected just now';
-
-  alertBox.classList.remove(
-    'hidden'
-  );
+  timeEl.innerText = alert.timestamp ? `Detected: ${formatSensorTime(alert.timestamp)}` : 'Detected just now';
+  alertBox.classList.remove('hidden');
 }
 
 function hideLiveSensorAlert() {
-
-  const alertBox =
-    document.getElementById(
-      'live-sensor-alert'
-    );
-
-  if (alertBox) {
-
-    alertBox.classList.add(
-      'hidden'
-    );
-  }
+  const alertBox = document.getElementById('live-sensor-alert');
+  if (alertBox) alertBox.classList.add('hidden');
 }
 
 async function fetchRecentAlerts() {
-
-  const response =
-    await fetch(
-      `${getApiBase()}/api/alerts/recent`,
-      {
-        cache: 'no-store'
-      }
-    );
-
-  if (!response.ok) {
-
-    throw new Error(
-      `Alerts API returned ${response.status}`
-    );
-  }
-
-  const alerts =
-    await response.json();
-
-  return Array.isArray(
-    alerts
-  )
-    ? alerts
-    : [];
+  const response = await fetch(`${getApiBase()}/api/alerts/recent`, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Alerts API returned ${response.status}`);
+  const alerts = await response.json();
+  return Array.isArray(alerts) ? alerts : [];
 }
 
 function isReactiveSensorAlert(alert) {
-  const message =
-    String(alert?.message || '');
-
-  const level =
-    String(alert?.risk_level || '')
-      .toLowerCase();
-
-  const zoneId =
-    String(alert?.zone_id || '');
-
-  const isHardwareAlert =
-    /abnormal sensor threshold detected/i.test(message) ||
-    /reactive alert/i.test(message);
-
-  return (
-    zoneId === 'ESP32_01' &&
-    level === 'critical' &&
-    isHardwareAlert
-  );
+  const message = String(alert?.message || '');
+  const level = String(alert?.risk_level || '').toLowerCase();
+  const zoneId = String(alert?.zone_id || '');
+  const isHardwareAlert = /abnormal sensor threshold detected/i.test(message) || /reactive alert/i.test(message);
+  return zoneId === 'ESP32_01' && level === 'critical' && isHardwareAlert;
 }
+
 async function pollLiveSensorAlerts() {
-
   try {
+    const alerts = await fetchRecentAlerts();
+    const sensorAlerts = alerts.filter(isReactiveSensorAlert);
 
-    const alerts =
-      await fetchRecentAlerts();
-
-    const sensorAlerts =
-      alerts.filter(
-        isReactiveSensorAlert
-      );
-
-    // No alerts yet.
-    // Still mark monitor as initialized so
-    // the first new ESP32 alert is shown.
-    if (
-      sensorAlerts.length === 0
-    ) {
-
-      liveAlertMonitorInitialized =
-        true;
-
+    if (sensorAlerts.length === 0) {
+      liveAlertMonitorInitialized = true;
       return;
     }
 
-    const latestAlert =
-      sensorAlerts[0];
+    const latestAlert = sensorAlerts[0];
+    const alertId = Number(latestAlert.alert_id || 0);
 
-    const alertId =
-      Number(
-        latestAlert.alert_id || 0
-      );
-
-    // On first poll with existing alerts,
-    // establish a baseline so old alerts aren't
-    // presented as live.
-    if (
-      !liveAlertMonitorInitialized
-    ) {
-
-      latestSeenAlertId =
-        alertId;
-
-      liveAlertMonitorInitialized =
-        true;
-
+    if (!liveAlertMonitorInitialized) {
+      latestSeenAlertId = alertId;
+      liveAlertMonitorInitialized = true;
       return;
     }
 
-    if (
-      alertId > 0 &&
-      alertId <=
-        latestSeenAlertId
-    ) {
+    if (alertId > 0 && alertId <= latestSeenAlertId) return;
+    if (alertId > 0) latestSeenAlertId = alertId;
 
-      return;
-    }
-
-    if (
-      alertId > 0
-    ) {
-
-      latestSeenAlertId =
-        alertId;
-    }
-
-    let reading =
-      null;
-
-    const zoneId =
-      latestAlert.zone_id;
+    let reading = null;
+    const zoneId = latestAlert.zone_id;
 
     if (zoneId) {
-
       try {
-
-        const sensorResponse =
-          await fetch(
-            `${getApiBase()}/api/sensor-data/latest/${encodeURIComponent(zoneId)}`,
-            {
-              cache: 'no-store'
-            }
-          );
-
-        if (
-          sensorResponse.ok
-        ) {
-
-          const sensorData =
-            await sensorResponse.json();
-
-          if (
-            sensorData.status ===
-              'ok' &&
-            sensorData.reading
-          ) {
-
-            reading =
-              sensorData.reading;
+        const sensorResponse = await fetch(
+          `${getApiBase()}/api/sensor-data/latest/${encodeURIComponent(zoneId)}`,
+          { cache: 'no-store' }
+        );
+        if (sensorResponse.ok) {
+          const sensorData = await sensorResponse.json();
+          if (sensorData.status === 'ok' && sensorData.reading) {
+            reading = sensorData.reading;
           }
         }
-
       } catch (sensorError) {
-
-        console.warn(
-          '[Live Alert] Sensor reading unavailable:',
-          sensorError
-        );
+        console.warn('[Live Alert] Sensor reading unavailable:', sensorError);
       }
     }
 
-    showLiveSensorAlert(
-      latestAlert,
-      reading
-    );
-
-    console.log(
-      '[LIVE SENSOR ALERT]',
-      latestAlert,
-      reading
-    );
-
+    showLiveSensorAlert(latestAlert, reading);
+    console.log('[LIVE SENSOR ALERT]', latestAlert, reading);
   } catch (error) {
-
-    console.warn(
-      '[Live Alert] Alert polling failed:',
-      error
-    );
+    console.warn('[Live Alert] Alert polling failed:', error);
   }
 }
 
 function startLiveSensorAlertMonitoring() {
-
   ensureLiveSensorAlertUI();
-
   pollLiveSensorAlerts();
-
-  liveAlertPollTimer =
-    setInterval(
-      pollLiveSensorAlerts,
-      3000
-    );
+  liveAlertPollTimer = setInterval(pollLiveSensorAlerts, 3000);
 }
 
-// 16. Boot System & Fetch Live Feeds
+// =========================================================================
+// 16. Operational Alerts Manager
+// =========================================================================
+
+function dispatchAlert() {
+  const titleInput = document.getElementById('alert-title');
+  const severitySelect = document.getElementById('alert-severity');
+  const regionSelect = document.getElementById('alert-region');
+
+  const title = titleInput ? titleInput.value.trim() : '';
+  const severity = severitySelect ? severitySelect.value : 'Warning';
+  const region = regionSelect ? regionSelect.value : 'All NER States';
+
+  if (!title) {
+    alert('Please enter an alert message before dispatching.');
+    return;
+  }
+
+  const newAlert = {
+    id: 'alert_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+    title: title,
+    severity: severity,
+    region: region,
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  };
+
+  const alerts = JSON.parse(localStorage.getItem('giri_alerts') || '[]');
+  alerts.unshift(newAlert);
+  localStorage.setItem('giri_alerts', JSON.stringify(alerts));
+
+  titleInput.value = '';
+  renderAlertsFeed();
+}
+
+window.deleteAlert = function(alertId) {
+  let alerts = JSON.parse(localStorage.getItem('giri_alerts') || '[]');
+  alerts = alerts.filter(a => String(a.id) !== String(alertId));
+  localStorage.setItem('giri_alerts', JSON.stringify(alerts));
+  renderAlertsFeed();
+};
+
+window.clearAllAlerts = function() {
+  localStorage.removeItem('giri_alerts');
+  renderAlertsFeed();
+};
+
+function renderAlertsFeed() {
+  const officialContainer = document.getElementById('alerts-feed-container');
+  const publicContainer = document.getElementById('public-alerts-feed');
+  const officialBadge = document.getElementById('active-alert-count');
+  const publicBadge = document.getElementById('public-alert-count');
+
+  let alerts = JSON.parse(localStorage.getItem('giri_alerts') || '[]');
+
+  let updated = false;
+  alerts = alerts.map((a, idx) => {
+    if (!a.id) {
+      a.id = 'alert_' + Date.now() + '_' + idx;
+      updated = true;
+    }
+    return a;
+  });
+  if (updated) {
+    localStorage.setItem('giri_alerts', JSON.stringify(alerts));
+  }
+
+  if (officialBadge) officialBadge.innerText = `${alerts.length} ACTIVE`;
+  if (publicBadge) publicBadge.innerText = `${alerts.length} ACTIVE`;
+
+  const emptyPlaceholder = '<p style="color: #94a3b8; font-size: 12px; margin: 0; padding: 4px;">No active advisories issued.</p>';
+
+  if (alerts.length === 0) {
+    if (officialContainer) officialContainer.innerHTML = emptyPlaceholder;
+    if (publicContainer) publicContainer.innerHTML = emptyPlaceholder;
+    return;
+  }
+
+  const role = sessionStorage.getItem('userRole');
+  const isOfficial = role === 'official';
+
+  const html = alerts
+    .map(a => {
+      const isCritical = (a.severity || '').toLowerCase() === 'critical';
+      const accentColor = isCritical ? '#ef4444' : '#f59e0b';
+      const bgBadge = isCritical ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)';
+
+      return `
+      <div style="background: #0f172a; border-left: 4px solid ${accentColor}; border: 1px solid #334155; border-left-width: 4px; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; position: relative;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-size: 10px; font-weight: 700; color: ${accentColor}; background: ${bgBadge}; padding: 2px 6px; border-radius: 4px;">
+            ${(a.severity || 'WARNING').toUpperCase()}
+          </span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 11px; color: #94a3b8;">${a.timestamp || ''}</span>
+            ${
+              isOfficial
+                ? `
+              <button type="button" onclick="window.deleteAlert('${a.id}')" title="Delete Alert" 
+                style="background: #ef4444; color: #ffffff; border: none; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; padding: 3px 8px; display: inline-flex; align-items: center; line-height: 1;">
+                ✕ Delete
+              </button>`
+                : ''
+            }
+          </div>
+        </div>
+        <div style="font-size: 13px; font-weight: 600; color: #f8fafc; line-height: 1.3;">${a.title}</div>
+        <div style="font-size: 11px; color: #38bdf8; margin-top: 4px;">📍 Coverage: ${a.region || 'All NER States'}</div>
+      </div>
+    `;
+    })
+    .join('');
+
+  if (officialContainer) officialContainer.innerHTML = html;
+  if (publicContainer) publicContainer.innerHTML = html;
+}
+
+// =========================================================================
+// 17. Authentication & Role Switcher
+// =========================================================================
+
+let selectedRole = 'citizen';
+
+function openLoginModal() {
+  const modal = document.getElementById('login-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeLoginModal() {
+  const modal = document.getElementById('login-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function selectRole(role) {
+  selectedRole = role;
+  const btnCitizen = document.getElementById('tab-citizen');
+  const btnOfficial = document.getElementById('tab-official');
+  const label = document.getElementById('login-id-label');
+
+  if (role === 'official') {
+    if (btnOfficial) {
+      btnOfficial.style.background = '#2563eb';
+      btnOfficial.style.color = '#fff';
+    }
+    if (btnCitizen) {
+      btnCitizen.style.background = 'transparent';
+      btnCitizen.style.color = '#94a3b8';
+    }
+    if (label) label.innerText = 'Official Badge / Dept ID';
+  } else {
+    if (btnCitizen) {
+      btnCitizen.style.background = '#2563eb';
+      btnCitizen.style.color = '#fff';
+    }
+    if (btnOfficial) {
+      btnOfficial.style.background = 'transparent';
+      btnOfficial.style.color = '#94a3b8';
+    }
+    if (label) label.innerText = 'Citizen Mobile / Email';
+  }
+}
+
+function submitLogin(e) {
+  if (e) e.preventDefault();
+  const idInput = document.getElementById('login-id-input');
+  const id = idInput ? idInput.value.trim() : '';
+  sessionStorage.setItem('userRole', selectedRole);
+  sessionStorage.setItem('userId', id);
+  closeLoginModal();
+  applyRoleUI();
+}
+
+function handleAuthAction() {
+  const currentRole = sessionStorage.getItem('userRole');
+  if (currentRole) {
+    sessionStorage.clear();
+    applyRoleUI();
+  } else {
+    openLoginModal();
+  }
+}
+
+function applyRoleUI() {
+  const role = sessionStorage.getItem('userRole');
+  const authBtn = document.getElementById('auth-action-btn');
+  const reportBtn = document.getElementById('citizen-report-btn');
+  const officialPanel = document.getElementById('official-alert-panel');
+  const roleBadge = document.getElementById('user-role-badge');
+
+  const publicView = document.getElementById('public-view-container');
+  const officialView = document.getElementById('official-view-container');
+
+  if (role === 'official') {
+    if (publicView) publicView.style.display = 'none';
+    if (officialView) officialView.style.display = 'block';
+
+    if (authBtn) {
+      authBtn.innerText = 'Logout';
+      authBtn.style.background = '#e11d48';
+    }
+    if (reportBtn) reportBtn.style.display = 'none';
+    if (officialPanel) officialPanel.style.display = 'block';
+    if (roleBadge) {
+      roleBadge.innerText = 'OFFICIAL MONITOR';
+      roleBadge.style.color = '#f87171';
+    }
+
+    setTimeout(() => {
+      if (typeof telemetryChart !== 'undefined' && telemetryChart) {
+        telemetryChart.resize();
+      }
+    }, 150);
+  } else if (role === 'citizen') {
+    if (publicView) publicView.style.display = 'block';
+    if (officialView) officialView.style.display = 'none';
+
+    if (authBtn) {
+      authBtn.innerText = 'Logout';
+      authBtn.style.background = '#e11d48';
+    }
+    if (reportBtn) reportBtn.style.display = 'inline-block';
+    if (officialPanel) officialPanel.style.display = 'none';
+  } else {
+    if (publicView) publicView.style.display = 'block';
+    if (officialView) officialView.style.display = 'none';
+
+    if (authBtn) {
+      authBtn.innerText = 'Login';
+      authBtn.style.background = '#0284c7';
+    }
+    if (reportBtn) reportBtn.style.display = 'none';
+    if (officialPanel) officialPanel.style.display = 'none';
+  }
+
+  renderAlertsFeed();
+  loadSavedCitizenReports();
+}
+
+// Explicit window bindings for inline HTML triggers
+window.openLoginModal = openLoginModal;
+window.closeLoginModal = closeLoginModal;
+window.selectRole = selectRole;
+window.submitLogin = submitLogin;
+window.handleAuthAction = handleAuthAction;
+window.dispatchAlert = dispatchAlert;
+
+// Automatically adjusts Leaflet tile layout on orientation change or screen resize
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => {
+    if (typeof map !== 'undefined' && map) {
+      map.invalidateSize();
+    }
+  }, 250);
+});
+
+// =========================================================================
+// 18. Dark Mode Controller
+// =========================================================================
+
+function initDarkMode() {
+  const toggleBtn = document.getElementById('theme-toggle-btn');
+  const icon = document.getElementById('theme-icon');
+  const label = document.getElementById('theme-label');
+
+  const savedTheme = localStorage.getItem('giri_theme');
+  const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+  if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
+    document.body.classList.add('dark-mode');
+    if (icon) icon.innerText = '☀️';
+    if (label) label.innerText = 'Light';
+  }
+
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      const isDark = document.body.classList.toggle('dark-mode');
+      localStorage.setItem('giri_theme', isDark ? 'dark' : 'light');
+
+      if (icon) icon.innerText = isDark ? '☀️' : '🌙';
+      if (label) label.innerText = isDark ? 'Light' : 'Dark';
+    });
+  }
+}
+
+// =========================================================================
+// 19. Boot System & Fetch Live Feeds
+// =========================================================================
 
 initChart();
-
 renderAllNEROverview();
-
 loadBackendRiskZones();
-
 syncAllRegionalLiveFeeds();
-
-// Load the correct telemetry source for the current view.
 refreshTelemetry();
-
-// Start live sensor alert monitoring.
 startLiveSensorAlertMonitoring();
+initDarkMode();
 
-// A selected ML zone keeps showing that zone's own sensor data.
-setInterval(
-  () => {
-    refreshTelemetry();
-  },
-  3000
-);
+setInterval(() => {
+  refreshTelemetry();
+}, 3000);
 
-setTimeout(
-  () => {
-    map.invalidateSize();
-  },
-  200
-);
+setTimeout(() => {
+  map.invalidateSize();
+}, 200);
 
-window.addEventListener(
-  'resize',
-  () => {
-    map.invalidateSize();
-  }
-);
+window.addEventListener('resize', () => {
+  map.invalidateSize();
+});
+
+document.addEventListener('DOMContentLoaded', applyRoleUI);

@@ -2,20 +2,26 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+from config import CORS_ORIGINS, UPLOAD_DIR
 
 from database import Base, engine
 import models
 from fastapi.middleware.cors import CORSMiddleware
-from routes.sensors import router as sensors_router
-from routes.risk import router as risk_router
 from routes.alerts import router as alerts_router
+from routes.auth import router as auth_router
+from routes.notifications import router as notifications_router
+from routes.official import router as official_router
 from routes.reports import router as reports_router
 
+from routes.risk import router as risk_router
+from routes.sensors import router as sensors_router
 
 app = FastAPI(
     title="GiriRakshak API",
-    description="Backend API for AI-powered landslide monitoring",
-    version="1.0.0",
+    description="AI-powered landslide monitoring, citizen reporting and official response API",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -36,6 +42,28 @@ app.add_middleware(
 
 Base.metadata.create_all(bind=engine)
 
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ============================================================
+# ROUTES
+# ============================================================
+
 
 # ============================================================
 # CORS
@@ -52,7 +80,7 @@ allowed_origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,26 +91,28 @@ app.add_middleware(
 # ROUTES
 # ============================================================
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+
+app.include_router(auth_router)
+app.include_router(reports_router)
+app.include_router(official_router)
+app.include_router(notifications_router)
 app.include_router(sensors_router)
 app.include_router(risk_router)
 app.include_router(alerts_router)
-app.include_router(reports_router)
-
-
-# ============================================================
-# ROOT
-# ============================================================
-
 @app.get("/")
 def root():
-    return {
-        "status": "online",
-        "message": "GiriRakshak API is running",
-    }
+    return {"status": "online", "message": "GiriRakshak API v2 is running"}
 
 
 @app.get("/health")
 def health_check():
-    return {
-        "status": "healthy",
-    }
+    return {"status": "healthy", "database": "configured"}

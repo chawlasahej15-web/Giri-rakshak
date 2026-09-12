@@ -2,7 +2,6 @@ annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.0
 click==8.5.0
-fastapi==0.141.1
 greenlet==3.5.5
 h11==0.16.0
 idna==3.19
@@ -11,7 +10,12 @@ numpy==2.3.5
 pandas==2.3.3
 pydantic==2.13.5
 pydantic_core==2.46.5
+python-dotenv>=1.1,<2
+email-validator>=2.2,<3
 python-multipart==0.0.32
+PyJWT>=2.10,<3
+pwdlib[argon2]>=0.2,<1
+psycopg[binary]>=3.3,<4
 scikit-learn==1.7.2
 shap==0.52.0
 SQLAlchemy==2.0.52
@@ -19,6 +23,8 @@ starlette==1.6.0
 typing-inspection==0.4.4
 typing_extensions==4.16.0
 uvicorn==0.52.4
+fastapi==0.141.1
+pandas>=2.2,<4
 xgboost==3.4.1
 twilio
 python-dotenv

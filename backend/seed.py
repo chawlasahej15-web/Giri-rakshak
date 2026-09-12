@@ -1,213 +1,64 @@
+import argparse
+import os
+import secrets
 from pathlib import Path
-
 import pandas as pd
-
-from database import (
-    Base,
-    SessionLocal,
-    engine,
-)
-
 from models import Zone
+from sqlalchemy.orm import Session
+
+from auth import hash_password
+from database import Base, SessionLocal, engine
+from models import User
 
 
-# ============================================================
-# PATHS
-# ============================================================
+def main():
+    parser = argparse.ArgumentParser(description="Seed Giri-Rakshak demo official account")
+    parser.add_argument("--email", default=os.getenv("SEED_OFFICIAL_EMAIL", "official@girirakshak.local"))
+    parser.add_argument("--password", default=os.getenv("SEED_OFFICIAL_PASSWORD"))
+    parser.add_argument("--name", default="District Disaster Management Officer")
+    parser.add_argument("--department", default="Disaster Management")
+    args = parser.parse_args()
 
-ROOT = (
-    Path(__file__)
-    .resolve()
-    .parents[1]
-)
+    Base.metadata.create_all(bind=engine)
+    password = args.password or secrets.token_urlsafe(12)
 
-DEMO_ZONE_FILE = (
-    ROOT
-    / "ml"
-    / "data"
-    / "demo"
-    / "demo_zones.csv"
-)
-
-
-# ============================================================
-# CREATE TABLES
-# ============================================================
-
-Base.metadata.create_all(
-    bind=engine
-)
-
-
-# ============================================================
-# LOAD DEMO ZONES
-# ============================================================
-
-if not DEMO_ZONE_FILE.exists():
-
-    raise FileNotFoundError(
-        f"Demo zone file not found:\n"
-        f"{DEMO_ZONE_FILE}"
-    )
-
-
-zones = pd.read_csv(
-    DEMO_ZONE_FILE
-)
-
-
-required_columns = [
-    "zone_id",
-    "lat",
-    "lon",
-]
-
-
-missing = [
-    column
-    for column in required_columns
-    if column not in zones.columns
-]
-
-
-if missing:
-
-    raise ValueError(
-        "demo_zones.csv is missing columns:\n"
-        + "\n".join(missing)
-    )
-
-
-if zones["zone_id"].duplicated().any():
-
-    raise ValueError(
-        "Duplicate zone_id values found "
-        "in demo_zones.csv."
-    )
-
-
-if len(zones) != 12:
-
-    raise ValueError(
-        f"Expected 12 demo zones, "
-        f"found {len(zones)}."
-    )
-
-
-# ============================================================
-# UPSERT DEMO ZONES
-# ============================================================
-
-db = SessionLocal()
-
-created = 0
-updated = 0
-existing = 0
-
-
-try:
-
-    for _, row in zones.iterrows():
-
-        zone_id = str(
-            row["zone_id"]
-        )
-
-        lat = float(
-            row["lat"]
-        )
-
-        lon = float(
-            row["lon"]
-        )
-
-
-        zone = (
-            db.query(Zone)
-            .filter(
-                Zone.zone_id
-                == zone_id
-            )
-            .first()
-        )
-
-
-        if zone is None:
-
-            zone = Zone(
-                zone_id=zone_id,
-                lat=lat,
-                lon=lon,
-            )
-
-            db.add(zone)
-
-            created += 1
-
+    db: Session = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == args.email.lower()).first()
+        if user:
+            user.full_name = args.name
+            user.role = "official"
+            user.department = args.department
+            user.password_hash = hash_password(password)
+            user.is_active = True
+            action = "updated"
         else:
+            user = User(
+                full_name=args.name,
+                email=args.email.lower(),
+                password_hash=hash_password(password),
+                role="official",
+                department=args.department,
+                is_active=True,
+            )
+            db.add(user)
+            action = "created"
 
-            # Keep the DB location synchronized
-            # with demo_zones.csv.
-            if (
-                zone.lat != lat
-                or
-                zone.lon != lon
-            ):
+            db.commit()
+        print("=" * 60)
+        print("GIRI-RAKSHAK OFFICIAL SEED")
+        print("=" * 60)
+        print(f"Action   : {action}")
+        print(f"Email    : {args.email.lower()}")
+        print(f"Password : {password}")
+        print("Role     : official")
+        print("Store these credentials only for your demo/testing account.")
+        
 
-                zone.lat = lat
-                zone.lon = lon
+    finally:
 
-                updated += 1
-
-            else:
-
-                existing += 1
+        db.close()
 
 
-    db.commit()
-
-
-finally:
-
-    db.close()
-
-
-# ============================================================
-# SUMMARY
-# ============================================================
-
-print()
-print("=" * 70)
-print("GIRIRAKSHAK DEMO ZONE SEED")
-print("=" * 70)
-
-print(
-    f"Configured zones : {len(zones)}"
-)
-
-print(
-    f"Created          : {created}"
-)
-
-print(
-    f"Updated          : {updated}"
-)
-
-print(
-    f"Already existing : {existing}"
-)
-
-print()
-print(
-    "No RiskScore records were created."
-)
-
-print(
-    "Risk scores will be generated by "
-    "the ML inference pipeline."
-)
-
-print()
-print("=" * 70)
-print("DEMO ZONES READY")
-print("=" * 70)
+if __name__ == "__main__":
+    main()

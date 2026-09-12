@@ -53,8 +53,6 @@ def main():
         print(f"Password : {password}")
         print("Role     : official")
         print("Store these credentials only for your demo/testing account.")
-        
-
     finally:
 
         db.close()

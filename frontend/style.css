@@ -13,7 +13,7 @@
   --sensor-purple: #7c3aed;
 }
 
-/* Universal Clean Reset (Fixed syntax error) */
+/* Universal Clean Reset */
 *, *::before, *::after {
   margin: 0;
   padding: 0;
@@ -37,7 +37,10 @@ html, body {
   display: none !important;
 }
 
-/* Header Pinned Flush to the Top Edge */
+/* =========================================================================
+   Header & Navbar (Desktop Standard)
+   ========================================================================= */
+
 .navbar, header, .nav-container {
   height: 54px;
   width: 100%;
@@ -56,13 +59,39 @@ html, body {
 .logo-group {
   display: flex;
   align-items: center;
+  gap: 12px;
 }
 
 .brand-logo {
-  height: 44px;
+  height: 50px;
   width: auto;
   object-fit: contain;
   display: block;
+}
+
+/* Base Status Pill */
+.system-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  padding: 0 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #15803d;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.status-dot, .pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.8);
 }
 
 /* Global Nav Search Container */
@@ -182,34 +211,57 @@ html, body {
 .suggestion-badge.city { background: #dcfce7; color: #15803d; }
 .suggestion-badge.zone { background: #fee2e2; color: #b91c1c; }
 
+/* Header Actions & Buttons */
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
-.system-status {
-  display: flex;
+#theme-toggle-btn {
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.82rem;
-  color: #166534;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  padding: 4px 10px;
-  border-radius: 16px;
-  font-weight: 700;
+  gap: 5px;
+  flex-shrink: 0;
 }
 
-.pulse-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #16a34a;
-  box-shadow: 0 0 6px rgba(22, 163, 74, 0.6);
+#citizen-report-btn {
+  display: none;
+  height: 36px;
+  line-height: 36px;
+  background: #0284c7;
+  color: #fff;
+  padding: 0 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
-/* Main Grid Layout */
+#auth-action-btn {
+  height: 36px;
+  padding: 0 20px;
+  background: #0284c7;
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* =========================================================================
+   Main Dashboard Grid & Map
+   ========================================================================= */
+
 .dashboard-grid {
   display: flex;
   flex: 1;
@@ -295,7 +347,10 @@ html, body {
   letter-spacing: 0.5px;
 }
 
-/* Sidebar */
+/* =========================================================================
+   Sidebar Cards & Modules
+   ========================================================================= */
+
 .sidebar {
   width: 420px;
   background: #f8fafc;
@@ -490,7 +545,7 @@ html, body {
 .btn-primary { background: var(--accent-blue); color: white; }
 .btn-primary:hover { background: var(--accent-blue-hover); }
 
-/* Map Legend */
+/* Desktop Map Legend */
 .map-legend {
   position: absolute;
   bottom: 24px;
@@ -521,10 +576,8 @@ html, body {
   box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
 }
 
-
-
 /* =========================================================================
-   RESPONSIVE LAYOUT ENGINE (Mobile & Tablet)
+   Tablet Responsive Architecture (max-width: 1024px)
    ========================================================================= */
 
 @media (max-width: 1024px) {
@@ -540,8 +593,8 @@ html, body {
   }
 
   .map-container {
-    height: 52vh;
-    min-height: 380px;
+    height: 60vh;
+    min-height: 440px;
   }
 
   .sidebar {
@@ -554,116 +607,191 @@ html, body {
   }
 }
 
+/* =========================================================================
+   Mobile Optimized Layout & Large Map (< 768px)
+   ========================================================================= */
+
 @media (max-width: 768px) {
+  /* Navbar Header */
   .navbar, header, .nav-container {
-    height: auto;
+    height: auto !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: space-between !important;
     padding: 8px 12px !important;
-    flex-wrap: wrap;
-    gap: 8px;
+    gap: 8px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Row 1 Left: Brand Logo */
+  .logo-group {
+    order: 1 !important;
+    display: flex !important;
+    align-items: center !important;
+    flex: 0 0 auto !important;
   }
 
   .brand-logo {
-    height: 36px;
+    height: 32px !important;
   }
 
+  /* Break out header actions to map items cleanly to rows */
+  .header-actions {
+    display: contents !important;
+  }
+
+  /* Row 1 Right: Status Badge placed right next to logo row */
+  .system-status-pill {
+    order: 2 !important;
+    height: 28px !important;
+    padding: 0 8px !important;
+    font-size: 10px !important;
+    gap: 5px !important;
+    margin-left: auto !important;
+  }
+
+  .status-dot, .pulse-dot {
+    width: 6px !important;
+    height: 6px !important;
+  }
+
+  /* Row 2: Dark Mode button on left */
+  #theme-toggle-btn {
+    order: 3 !important;
+    padding: 0 8px !important;
+    font-size: 11px !important;
+    height: 32px !important;
+    line-height: 32px !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Row 2: Citizen Report pinned right */
+  #citizen-report-btn {
+    order: 4 !important;
+    margin-left: auto !important;
+    white-space: nowrap !important;
+    font-size: 11px !important;
+    height: 32px !important;
+    line-height: 32px !important;
+    padding: 0 10px !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Row 2: Auth button pinned right */
+  #auth-action-btn {
+    order: 5 !important;
+    white-space: nowrap !important;
+    font-size: 11px !important;
+    height: 32px !important;
+    padding: 0 10px !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Row 3: Search input stretches across full width */
   .nav-search-container {
-    order: 3;
-    flex: 1 1 100%;
-    margin: 4px 0 0 0;
+    order: 6 !important;
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    margin: 2px 0 0 0 !important;
   }
 
-  .region-filter-card {
-    top: 12px;
-    left: 12px;
-    right: 12px;
-    width: calc(100% - 24px);
-    padding: 12px;
-  }
-
+  /* 1. Large, Immersive Map Height for Mobile */
   .map-container {
-    height: 48vh;
-    min-height: 320px;
-  }
-}
-
-
-/* =========================================================================
-   MOBILE OVERLAP FIX (< 768px)
-   ========================================================================= */
-@media (max-width: 768px) {
-  /* 1. Give the map container enough vertical room on mobile */
-  .map-container {
-    height: 60vh !important;
-    min-height: 440px !important;
+    height: 80vh !important;
+    min-height: 540px !important;
     position: relative !important;
   }
 
-  /* 2. Compact the filter card and pin it to the top */
+  /* 2. Compact Top Region Filter Card */
   .region-filter-card {
-    top: 8px !important;
-    left: 8px !important;
-    right: 8px !important;
+    top: 6px !important;
+    left: 6px !important;
+    right: 6px !important;
     width: auto !important;
-    padding: 8px 10px !important;
+    padding: 6px 8px !important;
     border-radius: 8px !important;
     background: rgba(255, 255, 255, 0.94) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
     z-index: 600 !important;
   }
 
   .filter-header {
-    margin-bottom: 6px !important;
-    padding-bottom: 4px !important;
+    margin-bottom: 4px !important;
+    padding-bottom: 2px !important;
+  }
+
+  .filter-icon {
+    font-size: 1rem !important;
+  }
+
+  .filter-header strong {
+    font-size: 0.78rem !important;
+  }
+
+  .filter-header small {
+    font-size: 0.62rem !important;
   }
 
   .filter-controls {
-    gap: 6px !important;
+    gap: 4px !important;
   }
 
   .control-group label {
-    font-size: 0.65rem !important;
-    margin-bottom: 2px !important;
+    font-size: 0.58rem !important;
+    margin-bottom: 1px !important;
   }
 
   .custom-select {
-    padding: 5px 8px !important;
-    font-size: 0.75rem !important;
-    height: 32px !important;
+    padding: 3px 6px !important;
+    font-size: 0.7rem !important;
+    height: 28px !important;
   }
 
-  /* 3. Collapse the legend into a compact, single-row pill pinned to the bottom */
+  #btn-reset-view {
+    padding: 4px 8px !important;
+    font-size: 0.7rem !important;
+  }
+
+  /* 3. Ultra-Compact Bottom-Left Hazard Legend */
   .map-legend {
     bottom: 8px !important;
     left: 8px !important;
     right: auto !important;
-    padding: 5px 8px !important;
-    font-size: 0.65rem !important;
-    max-width: calc(100% - 70px) !important;
-    border-radius: 6px !important;
-    background: rgba(255, 255, 255, 0.92) !important;
+    padding: 4px 6px !important;
+    font-size: 0.55rem !important;
+    max-width: 175px !important;
+    border-radius: 5px !important;
+    background: rgba(255, 255, 255, 0.94) !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
     z-index: 500 !important;
+    line-height: 1.15 !important;
   }
 
-  .map-legend h4 {
-    display: none !important; /* Hide title on small phones */
+  .map-legend h4,
+  .map-legend .legend-note,
+  .map-legend hr {
+    display: none !important;
   }
 
   .map-legend .legend-item {
     margin-bottom: 2px !important;
-    font-size: 0.62rem !important;
+    font-size: 0.55rem !important;
+    gap: 4px !important;
   }
 
-  .map-legend .legend-note {
-    display: none !important; /* Hide small notes to avoid height bloat */
+  .map-legend .dot {
+    width: 7px !important;
+    height: 7px !important;
+    flex-shrink: 0 !important;
   }
 
-  /* 4. Ensure Leaflet zoom controls do not collide with legend */
   .leaflet-bottom.leaflet-right .leaflet-control-zoom {
     margin-bottom: 8px !important;
     margin-right: 8px !important;
   }
 }
-
 
 /* =========================================================================
    DARK MODE SYSTEM
@@ -677,7 +805,6 @@ body.dark-mode {
   --text-dim: #94a3b8;
 }
 
-/* Backgrounds & Text Overrides */
 body.dark-mode .sidebar,
 body.dark-mode .district-alert-box,
 body.dark-mode .stat-box {
@@ -715,29 +842,26 @@ body.dark-mode .map-legend h4 {
   color: #f8fafc !important;
 }
 
-/* Subtly invert the Leaflet base tiles to create an authentic night map */
+/* Invert Leaflet base tiles to render dark mode terrain */
 body.dark-mode .leaflet-tile-pane {
   filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.35);
 }
 
-/* Retain original colors for overlays, heatmaps, and markers */
 body.dark-mode .leaflet-overlay-pane,
 body.dark-mode .leaflet-marker-pane,
 body.dark-mode .leaflet-popup-pane {
   filter: none !important;
 }
 
-/* Ensure Card & Heading stay high contrast in Dark Mode */
 body.dark-mode #official-alert-panel {
   background: #111c44 !important;
   border-color: #1e293b !important;
 }
 
 body.dark-mode #official-alert-panel h3 {
-  color: #f8fafc !important; /* Crisp white text */
+  color: #f8fafc !important;
 }
 
-/* Fix Input & Select boxes inside the broadcast card */
 body.dark-mode #official-alert-panel input,
 body.dark-mode #official-alert-panel select {
   background: #1b254b !important;
@@ -745,19 +869,16 @@ body.dark-mode #official-alert-panel select {
   border-color: #2b3674 !important;
 }
 
-/* Fix Placeholder text visibility */
 body.dark-mode #official-alert-panel input::placeholder {
   color: #94a3b8 !important;
   opacity: 1;
 }
 
-/* Polish Emergency Dispatch badge for dark mode */
 body.dark-mode #official-alert-panel .source-tag {
   background: rgba(239, 68, 68, 0.15) !important;
   color: #f87171 !important;
   border-color: rgba(239, 68, 68, 0.3) !important;
 }
-
 
 body.dark-mode #routes-avoid-card {
   background: #111c44 !important;
@@ -771,4 +892,77 @@ body.dark-mode #routes-avoid-card h3 {
 body.dark-mode #avoid-routes-list > div {
   background: #0b1329 !important;
   border-color: #1e293b !important;
+}
+
+/* =========================================================================
+   DARK MODE FIX: Corridors Watch & Helplines Tiles
+   ========================================================================= */
+
+/* Corridor Watch Tiles */
+body.dark-mode #public-view-container section.card:nth-of-type(3) div[style*="background: #f8fafc"],
+body.dark-mode section.card div[style*="background: #f8fafc"] {
+  background: #0b1329 !important;
+  border-color: #1e293b !important;
+}
+
+/* Corridor Highway Titles & Subtitles */
+body.dark-mode #public-view-container strong[style*="color: #0f172a"] {
+  color: #f8fafc !important;
+}
+
+body.dark-mode #public-view-container span[style*="color: #64748b"] {
+  color: #94a3b8 !important;
+}
+
+/* Corridor Risk Status Badges */
+body.dark-mode #public-view-container span[style*="background: #fef2f2"] {
+  background: rgba(220, 38, 38, 0.15) !important;
+  border-color: rgba(220, 38, 38, 0.35) !important;
+  color: #f87171 !important;
+}
+
+body.dark-mode #public-view-container span[style*="background: #fffbeb"] {
+  background: rgba(217, 119, 6, 0.15) !important;
+  border-color: rgba(217, 119, 6, 0.35) !important;
+  color: #fbbf24 !important;
+}
+
+/* Emergency Helpline Tiles */
+body.dark-mode #public-view-container section.card:nth-of-type(4) div[style*="background: #f8fafc"] {
+  background: #0b1329 !important;
+  border-color: #1e293b !important;
+}
+
+body.dark-mode #public-view-container div[style*="color: #64748b"] {
+  color: #94a3b8 !important;
+}
+
+body.dark-mode #public-view-container strong[style*="color: #0284c7"] {
+  color: #38bdf8 !important;
+}
+
+/* Helpline Header Badge (24x7 Toll-Free) */
+body.dark-mode #public-view-container span.badge.green {
+  background: rgba(34, 197, 94, 0.15) !important;
+  border-color: rgba(34, 197, 94, 0.3) !important;
+  color: #4ade80 !important;
+}
+
+
+
+
+/* Dark Mode Adaptation for Existing Logo */
+body.dark-mode .brand-logo {
+  filter: brightness(0) invert(1) drop-shadow(0 0 2px rgba(56, 189, 248, 0.4));
+  transition: filter 0.3s ease;
+}
+/* Fix white box issue in dark mode navbar logo area */
+body.dark-mode .logo-group img,
+body.dark-mode .brand-logo,
+body.dark-mode .logo-group svg {
+  background: transparent !important;
+}
+
+body.dark-mode .logo-group {
+  background: transparent !important;
 }

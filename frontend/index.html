@@ -7,18 +7,21 @@
   <title>GiriRakshak | NER Landslide Early Warning System</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="style.css" />
-  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 </head>
 
 <body>
 
   <header class="navbar">
+    <!-- Brand Logo -->
     <div class="logo-group">
-      <img src="logo.png" alt="GiriRakshak Logo" class="brand-logo" />
+      <img src="logo1.png" alt="GiriRakshak Logo" class="brand-logo" />
     </div>
 
+    <!-- Search Bar -->
     <div class="nav-search-container">
       <div class="search-input-wrapper">
         <span class="search-icon">🔍</span>
@@ -29,32 +32,26 @@
       <div id="search-suggestions" class="search-suggestions-dropdown hidden"></div>
     </div>
 
-    <div class="header-actions" style="display: flex; align-items: center; gap: 12px;">
+    <!-- Actions (Status Pill, Theme, Report, Auth) -->
+    <div class="header-actions">
+      <!-- Status Pill (Right side on desktop, jumps beside logo on mobile) -->
+      <div class="system-status-pill">
+        <span class="status-dot"></span>
+        <span class="status-text">NER Early Warning: Online</span>
+      </div>
 
-      <button id="theme-toggle-btn" class="btn btn-outline"
-        style="padding: 5px 10px; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 5px;"
-        aria-label="Toggle Theme">
+      <button id="theme-toggle-btn" class="btn btn-outline" aria-label="Toggle Theme">
         <span id="theme-icon">🌙</span>
         <span id="theme-label">Dark</span>
       </button>
 
-      <!-- Status Pill -->
-      <div class="system-status-pill"
-        style="display: inline-flex; align-items: center; gap: 8px; height: 36px; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.25); padding: 0 14px; border-radius: 20px; font-size: 12px; font-weight: 600; color: #15803d; white-space: nowrap;">
-        <span
-          style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%; box-shadow: 0 0 6px rgba(34, 197, 94, 0.8);"></span>
-        <span>NER Early Warning: Online</span>
-      </div>
-
-      <!-- Citizen Report button -->
-      <a href="report.html" id="citizen-report-btn" class="action-btn"
-        style="display: none; height: 36px; line-height: 36px; background: #0284c7; color: #fff; padding: 0 16px; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: 600;">
+      <!-- Citizen Report Button -->
+      <a href="report.html" id="citizen-report-btn" class="action-btn">
         + Citizen Report
       </a>
 
       <!-- Login / Logout Button -->
-      <button id="auth-action-btn" onclick="handleAuthAction()"
-        style="height: 36px; padding: 0 20px; background: #0284c7; border: none; color: #fff; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; transition: background 0.2s;">
+      <button id="auth-action-btn" onclick="handleAuthAction()" class="auth-btn">
         Login
       </button>
     </div>
@@ -400,7 +397,7 @@
               </span>
             </div>
 
-            <span class="badge blue" style="font-size: 11px; padding: 2px 6px;">Model: RF + SHAP</span>
+            <span class="badge blue" style="font-size: 11px; padding: 2px 6px;">Model: RF + SHAP + XGBoost</span>
 
             <div style="margin-top: 10px;">
               <strong style="font-size: 12px; color: #0f172a;">Why is this slope at risk?</strong>
@@ -486,39 +483,39 @@
   </main>
 
   <div id="login-modal"
-    style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center;">
+    style="display: flex; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 99999; align-items: center; justify-content: center; padding: 16px;">
     <div
-      style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; width: 100%; max-width: 380px; padding: 24px; color: #f8fafc; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-      <button onclick="closeLoginModal()"
-        style="position: absolute; right: 14px; top: 12px; background: transparent; border: none; color: #94a3b8; font-size: 20px; cursor: pointer;">&times;</button>
+      style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; width: 100%; max-width: 380px; padding: 24px; color: #f8fafc; position: relative; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5); font-family: system-ui, -apple-system, sans-serif;">
+      <button type="button" onclick="closeLoginModal()"
+        style="position: absolute; right: 14px; top: 12px; background: transparent; border: none; color: #94a3b8; font-size: 22px; line-height: 1; cursor: pointer; padding: 4px;">&times;</button>
 
-      <h3 style="margin: 0 0 4px 0;">Portal Sign In</h3>
+      <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 700;">Giri Rakshak Log In </h3>
       <p style="margin: 0 0 16px 0; color: #94a3b8; font-size: 13px;">Select account type</p>
 
       <div style="display: flex; background: #0f172a; padding: 4px; border-radius: 8px; margin-bottom: 16px;">
         <button type="button" id="tab-citizen" onclick="selectRole('citizen')"
-          style="flex: 1; padding: 8px; border: none; background: #2563eb; color: #fff; border-radius: 6px; font-weight: 600; cursor: pointer;">Citizen</button>
+          style="flex: 1; padding: 8px; border: none; background: #2563eb; color: #ffffff; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s;">Citizen</button>
         <button type="button" id="tab-official" onclick="selectRole('official')"
-          style="flex: 1; padding: 8px; border: none; background: transparent; color: #94a3b8; border-radius: 6px; font-weight: 600; cursor: pointer;">Official</button>
+          style="flex: 1; padding: 8px; border: none; background: transparent; color: #94a3b8; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s;">Official</button>
       </div>
 
       <form onsubmit="submitLogin(event)">
-        <label id="login-id-label" style="font-size: 12px; color: #94a3b8;">Citizen Mobile / Email</label>
+        <label id="login-id-label" style="display: block; font-size: 12px; color: #94a3b8; font-weight: 500;">Citizen
+          Mobile / Email</label>
         <input type="text" id="login-id-input" required placeholder="Enter mobile or email"
-          style="width: 100%; box-sizing: border-box; padding: 10px; margin: 6px 0 14px 0; background: #0f172a; border: 1px solid #334155; color: #fff; border-radius: 6px;">
+          style="width: 100%; box-sizing: border-box; padding: 10px 12px; margin: 6px 0 14px 0; background: #0f172a; border: 1px solid #334155; color: #ffffff; border-radius: 6px; font-size: 13px; outline: none;">
 
-        <label style="font-size: 12px; color: #94a3b8;">Password</label>
+        <label style="display: block; font-size: 12px; color: #94a3b8; font-weight: 500;">Password</label>
         <input type="password" id="login-pwd-input" required placeholder="••••••••"
-          style="width: 100%; box-sizing: border-box; padding: 10px; margin: 6px 0 18px 0; background: #0f172a; border: 1px solid #334155; color: #fff; border-radius: 6px;">
+          style="width: 100%; box-sizing: border-box; padding: 10px 12px; margin: 6px 0 18px 0; background: #0f172a; border: 1px solid #334155; color: #ffffff; border-radius: 6px; font-size: 13px; outline: none;">
 
         <button type="submit"
-          style="width: 100%; padding: 10px; background: #2563eb; border: none; color: #fff; border-radius: 6px; font-weight: 700; cursor: pointer;">Sign
+          style="width: 100%; padding: 11px; background: #2563eb; border: none; color: #ffffff; border-radius: 6px; font-size: 14px; font-weight: 700; cursor: pointer; transition: background 0.15s;">Sign
           In</button>
       </form>
     </div>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="dashboard.js"></script>
 </body>
 

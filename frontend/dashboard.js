@@ -1,6 +1,6 @@
 // =========================================================================
 // GiriRakshak SIH Early Warning System Engine
-// Complete Live Regional Open-Meteo Ingestion + GSI Dendritic Ridge Heatmap
+// Complete Live Regional Open-Meteo Ingestion + Dynamic AI Heatmap Engine
 // Real-time ESP32 Pipeline + Overpass Highway Network 1 km Avoidance Corridors
 // =========================================================================
 
@@ -29,6 +29,8 @@ const zoneLayerGroup = L.layerGroup().addTo(map);
 const hardwareMarkerGroup = L.layerGroup().addTo(map);
 const citizenMarkerGroup = L.layerGroup().addTo(map);
 const avoidZonesGroup = L.layerGroup().addTo(map);
+
+let heatLayerInstance = null;
 
 // 2. Comprehensive 8-State Geological Coordinates & District Directory
 const nerData = {
@@ -375,15 +377,13 @@ const nerData = {
   }
 };
 
-// 3. Pre-Seeded Ground Citizen Reports
 const seedCitizenReports = [];
 
-// 4. Multilingual Dispatch Translations
 const translations = {
   en: "Warning: High landslide hazard detected on slope cuts. Evacuate immediately.",
   mz: "Fimkhurna: He laiah hian leimin hlauhawm a awm. Kham bul atangin inthiarfihlim vat rawh u.",
   as: "সাৱধান: পাহাৰীয়া অঞ্চলত ভূমিস্খলনৰ প্ৰৱল আশংকা। অবিলম্বে সুৰক্ষিত স্থানলৈ যাওক।",
-  bn: "সতর্কতা: বিপজ্জনক পাহাড়ী ঢালে ভূমিধসের সম্ভাবনা। দ্রুত নিরাপদ আশ্রয়ে যান।"
+  bn: "সতর্কতা: বিপজ্জনক পাহাড়ী ঢালে ভূমিধসের সম্ভাবনা। দ্রুত নিরাপদ আশ্রয়ে যান."
 };
 
 function getHazardColor(scoreOrLevel) {
@@ -546,7 +546,7 @@ function getApiBase() {
     window.location.hostname === '127.0.0.1'
   )
     ? 'http://127.0.0.1:8000'
-    : 'https://YOUR-ACTUAL-RENDER-URL.onrender.com';
+    : `${window.location.protocol}//${window.location.hostname}:8000`;
 }
 
 async function loadBackendRiskZones() {
@@ -555,11 +555,9 @@ async function loadBackendRiskZones() {
     if (!response.ok) throw new Error(`API returned ${response.status}`);
     const zones = await response.json();
     backendRiskZones = Array.isArray(zones) ? zones : [];
-    console.log('REAL BACKEND ML RISK ZONES:', backendRiskZones);
     renderBackendRiskZones(backendRiskZones);
     return backendRiskZones;
   } catch (error) {
-    console.error('Failed to load backend risk zones:', error);
     backendRiskZones = [];
     return [];
   }
@@ -577,10 +575,7 @@ async function loadLatestSensorTelemetryForZone(zoneId) {
     );
     if (!response.ok) throw new Error(`API returned ${response.status}`);
     const data = await response.json();
-    if (data.status !== 'ok' || !data.reading) {
-      console.warn(`No sensor telemetry for ${zoneId}`);
-      return;
-    }
+    if (data.status !== 'ok' || !data.reading) return;
 
     if (selectedBackendZoneId !== zoneId) return;
 
@@ -612,8 +607,6 @@ async function loadLatestSensorTelemetryForZone(zoneId) {
       moistureData.fill(moisture);
       telemetryChart.update('none');
     }
-
-    console.log(`ZONE SENSOR TELEMETRY [${zoneId}]:`, reading);
   } catch (error) {
     console.warn(`Failed to load telemetry for ${zoneId}:`, error);
   }
@@ -638,10 +631,7 @@ async function loadLatestSensorTelemetryBySensorId(sensorId) {
     );
     if (!response.ok) throw new Error(`API returned ${response.status}`);
     const data = await response.json();
-    if (data.status !== 'ok' || !data.reading) {
-      console.warn(`No sensor telemetry for ${sensorId}`);
-      return null;
-    }
+    if (data.status !== 'ok' || !data.reading) return null;
 
     const reading = data.reading;
     latestSensorReading = reading;
@@ -671,10 +661,8 @@ async function loadLatestSensorTelemetryBySensorId(sensorId) {
       telemetryChart.update('none');
     }
 
-    console.log(`HARDWARE SENSOR TELEMETRY [${sensorId}]:`, reading);
     return reading;
   } catch (error) {
-    console.warn(`Failed to load telemetry for ${sensorId}:`, error);
     return null;
   }
 }
@@ -690,18 +678,13 @@ async function refreshTelemetry() {
 }
 
 function renderBackendRiskZones(zones) {
-  console.log(`Rendering ${zones.length} real backend risk zones`);
-
   zones.forEach(zone => {
     const lat = Number(zone.lat);
     const lon = Number(zone.lon);
     const score = Number(zone.risk_score || 0);
     const level = String(zone.risk_level || 'Unknown');
 
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      console.warn('Skipping invalid zone coordinates:', zone);
-      return;
-    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
 
     const color = getHazardColor(score);
     const marker = L.circleMarker([lat, lon], {
@@ -728,61 +711,83 @@ function renderBackendRiskZones(zones) {
 
     zoneLayerGroup.addLayer(marker);
   });
-
-  console.log(`Real backend zones rendered: ${zones.length}`);
 }
 
 // =========================================================================
-// 7. Dendritic Geological Ridge Heatmap
+// 7. Dynamic AI Hazard Heatmap (Auto-Mounting Engine)
 // =========================================================================
 
-function renderDendriticRidgeHeatmap() {
-  rasterHeatmapGroup.clearLayers();
+const simulatedAIPredictions = [
+  // Aizawl Ridgeline Cluster (High/Critical Hazards)
+  { lat: 23.7420, lon: 92.7170, probability: 0.96 },
+  { lat: 23.7415, lon: 92.7168, probability: 0.94 },
+  { lat: 23.7425, lon: 92.7173, probability: 0.91 },
+  { lat: 23.7410, lon: 92.7165, probability: 0.88 },
+  { lat: 23.7430, lon: 92.7178, probability: 0.85 },
+  { lat: 23.7405, lon: 92.7160, probability: 0.79 },
+  // Ramhlun Corridor
+  { lat: 23.7550, lon: 92.7290, probability: 0.89 },
+  { lat: 23.7545, lon: 92.7285, probability: 0.87 },
+  { lat: 23.7558, lon: 92.7295, probability: 0.84 },
+  { lat: 23.7538, lon: 92.7280, probability: 0.81 },
+  { lat: 23.7565, lon: 92.7302, probability: 0.74 },
+  // Bawngkawn Junction
+  { lat: 23.7630, lon: 92.7360, probability: 0.76 },
+  { lat: 23.7622, lon: 92.7355, probability: 0.72 },
+  { lat: 23.7638, lon: 92.7368, probability: 0.68 },
+  // Valley Baselines
+  { lat: 23.7290, lon: 92.7380, probability: 0.55 },
+  { lat: 23.7310, lon: 92.7395, probability: 0.52 },
+  { lat: 23.7275, lon: 92.7365, probability: 0.49 },
+  { lat: 23.7320, lon: 92.7130, probability: 0.25 },
+  { lat: 23.7340, lon: 92.7145, probability: 0.20 }
+];
 
-  const bounds = [
-    [24.8, 93.1],
-    [27.2, 95.3]
-  ];
+function renderDendriticRidgeHeatmap(points = simulatedAIPredictions, autoFocus = false) {
+  if (heatLayerInstance) {
+    map.removeLayer(heatLayerInstance);
+    heatLayerInstance = null;
+  }
 
-  const svgHeatmap = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="100%" height="100%">
-      <defs>
-        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="4" result="blur" />
-          <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
-      </defs>
-      <path d="M 210,540 Q 230,460 270,410 T 340,320 T 420,240 T 520,150 T 570,120 Q 590,160 560,230 T 510,340 T 460,430 T 420,530 T 360,630 Q 290,660 240,620 Z" fill="#38bdf8" fill-opacity="0.38" filter="url(#glow)"/>
-      <path d="M 280,430 Q 320,380 390,360 T 480,280" fill="none" stroke="#7dd3fc" stroke-width="32" stroke-linecap="round" opacity="0.35" filter="url(#glow)"/>
-      <path d="M 330,520 Q 370,470 430,410 T 490,360" fill="none" stroke="#7dd3fc" stroke-width="26" stroke-linecap="round" opacity="0.35" filter="url(#glow)"/>
-      <g stroke="#ea580c" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.8" filter="url(#glow)">
-        <path d="M 240,560 Q 280,480 330,440 T 410,330 T 490,210 T 540,140" stroke-width="15"/>
-        <path d="M 330,440 Q 380,410 430,430 T 500,450" stroke-width="12"/>
-        <path d="M 410,330 Q 460,320 510,290" stroke-width="10"/>
-        <path d="M 270,590 Q 310,540 360,520 T 430,490" stroke-width="12"/>
-      </g>
-      <g stroke="#991b1b" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.95">
-        <path d="M 240,560 Q 280,480 330,440 T 410,330 T 490,210 T 540,140" stroke-width="5.5"/>
-        <path d="M 330,440 Q 380,410 430,430 T 500,450" stroke-width="4.5"/>
-        <path d="M 365,425 Q 395,380 435,370 T 475,340" stroke-width="4"/>
-        <path d="M 410,330 Q 460,320 510,290" stroke-width="4"/>
-        <path d="M 450,270 Q 480,250 510,240" stroke-width="3.5"/>
-        <path d="M 270,590 Q 310,540 360,520 T 430,490" stroke-width="4.5"/>
-        <path d="M 305,505 Q 340,480 370,475" stroke-width="3.5"/>
-      </g>
-      <g stroke="#dc2626" stroke-linecap="round" fill="none" opacity="0.9">
-        <path d="M 330,440 L 365,425 L 410,330 L 450,270 L 490,210" stroke-width="2.5"/>
-      </g>
-    </svg>
-  `;
+  // Safety fallback if leaflet-heat has not evaluated yet
+  if (typeof L.heatLayer !== 'function') {
+    console.warn('[GiriRakshak] leaflet-heat not ready in DOM. Injecting script dynamically...');
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js';
+    s.onload = () => renderDendriticRidgeHeatmap(points, autoFocus);
+    document.head.appendChild(s);
+    return;
+  }
 
-  const svgUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgHeatmap);
-  const imageOverlay = L.imageOverlay(svgUrl, bounds, {
-    opacity: 0.85,
-    interactive: false
+  // [latitude, longitude, intensity]
+  const heatData = points.map(pt => [
+    parseFloat(pt.lat),
+    parseFloat(pt.lon || pt.lng),
+    Math.min(1.0, Math.max(0.4, parseFloat(pt.probability || (pt.risk_score ? pt.risk_score / 100 : 0.6))))
+  ]).filter(pt => Number.isFinite(pt[0]) && Number.isFinite(pt[1]));
+
+  if (heatData.length === 0) return;
+
+  heatLayerInstance = L.heatLayer(heatData, {
+    radius: 40,
+    blur: 24,
+    maxZoom: 16,
+    max: 1.0,
+    minOpacity: 0.55,
+    gradient: {
+      0.20: '#38bdf8', // Stable Cyan
+      0.45: '#f97316', // Watch Orange
+      0.68: '#ea580c', // High Deep Orange
+      0.82: '#dc2626', // Very High Red
+      0.95: '#7f1d1d'  // Critical Crimson
+    }
   });
 
-  rasterHeatmapGroup.addLayer(imageOverlay);
+  heatLayerInstance.addTo(map);
+
+  if (autoFocus) {
+    map.flyTo([23.7450, 92.7250], 13, { duration: 1.2 });
+  }
 }
 
 // =========================================================================
@@ -808,6 +813,9 @@ function renderAllNEROverview() {
         stateSelect.value = stateKey;
         populateDistricts(stateKey);
         map.flyTo(state.center, state.zoom);
+        if (stateKey === 'mizoram') {
+          renderDendriticRidgeHeatmap(simulatedAIPredictions, true);
+        }
       });
 
       stateLayerGroup.addLayer(poly);
@@ -831,22 +839,7 @@ function renderAllNEROverview() {
 
   hardwareMarkerGroup.addLayer(singleEspMarker);
 
-  seedCitizenReports.forEach(rep => {
-    const citIcon = L.divIcon({
-      html: `<div style="background: #0284c7; border: 2px solid white; width: 14px; height: 14px; border-radius: 3px; box-shadow: 0 0 6px rgba(0,0,0,0.3);"></div>`,
-      iconSize: [14, 14]
-    });
-
-    const marker = L.marker(rep.coords, { icon: citIcon });
-    marker.bindPopup(`
-      <b>Citizen Field Incident</b><br/>
-      <b>Type:</b> ${rep.type}<br/>
-      <b>Location:</b> ${rep.place}<br/>
-      <i>"${rep.text}"</i>
-    `);
-    citizenMarkerGroup.addLayer(marker);
-  });
-
+  renderDendriticRidgeHeatmap(simulatedAIPredictions, false);
   loadSavedCitizenReports();
   resetOverviewSidebar();
   updateRoutesToAvoidView();
@@ -921,14 +914,6 @@ function updateBackendZoneView(zone) {
     hwBadge.innerText = 'BACKEND DATA';
   }
 
-  const elTilt = document.getElementById('val-tilt');
-  const elMoist = document.getElementById('val-moisture');
-  const elRain = document.getElementById('val-rain');
-
-  if (elTilt) elTilt.innerText = '—';
-  if (elMoist) elMoist.innerText = '—';
-  if (elRain) elRain.innerText = '—';
-
   const shapZone = {
     name: zone.zone_id,
     riskScore: score.toFixed(1),
@@ -956,6 +941,10 @@ async function updateDistrictView(stateKey, distKey) {
   if (!dist) return;
 
   map.flyTo(dist.center, dist.zoom, { duration: 1.2 });
+
+  if (stateKey === 'mizoram' && distKey === 'aizawl') {
+    renderDendriticRidgeHeatmap(simulatedAIPredictions, true);
+  }
 
   const isHardware = !!dist.isHardwareNode;
   telemetryViewMode = isHardware ? 'hardware' : 'model';
@@ -1157,6 +1146,10 @@ if (stateSelect) {
 
     populateDistricts(selectedState);
     map.flyTo(nerData[selectedState].center, nerData[selectedState].zoom);
+
+    if (selectedState === 'mizoram') {
+      renderDendriticRidgeHeatmap(simulatedAIPredictions, true);
+    }
   });
 }
 
@@ -1206,9 +1199,7 @@ if (btnTriggerAlert) {
     try {
       const response = await fetch(`${getApiBase()}/api/trigger-alert`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           zone_id: 'ESP32_01',
           risk_level: 'critical',
@@ -1234,7 +1225,6 @@ if (btnTriggerAlert) {
 // =========================================================================
 
 async function getAreaNameFromCoords(lat, lng) {
-  // 1. Direct query to OSM Overpass API to extract highway & street names within 1000 meters
   try {
     const overpassQuery = `
       [out:json][timeout:5];
@@ -1261,15 +1251,12 @@ async function getAreaNameFromCoords(lat, lng) {
       }
     }
   } catch (err) {
-    console.warn('[Overpass Road Search] Road network query failed, falling back...', err);
+    console.warn('[Overpass Road Search] Failed, falling back...', err);
   }
 
-  // 2. Secondary fallback: Query OSM Nominatim reverse geocode
   try {
     const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`;
-    const res = await fetch(nominatimUrl, {
-      headers: { 'Accept': 'application/json' }
-    });
+    const res = await fetch(nominatimUrl, { headers: { 'Accept': 'application/json' } });
     if (res.ok) {
       const data = await res.json();
       const addr = data.address || {};
@@ -1285,7 +1272,6 @@ async function getAreaNameFromCoords(lat, lng) {
     console.warn('[Nominatim Fallback Failed]', e);
   }
 
-  // 3. Known Geographical Highway Fallbacks for NER coordinates
   if (lat >= 23.6 && lat <= 23.85 && lng >= 92.65 && lng <= 92.8) return "NH-54 / Aizawl Bypass Arteries";
   if (lat >= 25.8 && lat <= 26.0 && lng >= 93.6 && lng <= 93.9) return "NH-29 (Dimapur-Kohima Gorge Corridor)";
   if (lat >= 25.6 && lat <= 25.75 && lng >= 94.05 && lng <= 94.2) return "NH-02 / Kohima Bypass Link";
@@ -1295,7 +1281,7 @@ async function getAreaNameFromCoords(lat, lng) {
 }
 
 // =========================================================================
-// 14. Citizen Field Incident & Routes to Avoid Sync Engine
+// 14. Citizen Field Incident & Routes to Avoid Sync Engine (Cross-Device)
 // =========================================================================
 
 function renderCitizenMarker(lat, lng, type, desc, image, shouldFly, id, reporter, locationName) {
@@ -1484,7 +1470,7 @@ function renderCitizenReportsSidebarList() {
   }
 }
 
-// 1 KM HAZARD BUFFER & AVOID ROUTES SYSTEM (WITH REAL OVERPASS HIGHWAYS)
+// 1 KM HAZARD BUFFER & AVOID ROUTES SYSTEM
 async function updateRoutesToAvoidView() {
   if (typeof avoidZonesGroup === 'undefined' || !avoidZonesGroup) return;
   avoidZonesGroup.clearLayers();
@@ -1514,7 +1500,6 @@ async function updateRoutesToAvoidView() {
     return;
   }
 
-  // Draw 1 km exclusion buffer circles around incident coordinates
   reports.forEach(r => {
     const lat = parseFloat(r.lat || r.latitude);
     const lng = parseFloat(r.lng || r.lon || r.longitude);
@@ -1536,14 +1521,12 @@ async function updateRoutesToAvoidView() {
     avoidZonesGroup.addLayer(bufferCircle);
   });
 
-  // Resolve real road names asynchronously and render cards
   let updatedStorage = false;
   const listItems = await Promise.all(reports.map(async (r, idx) => {
     const latNum = parseFloat(r.lat || r.latitude);
     const lngNum = parseFloat(r.lng || r.lon || r.longitude);
     const type = r.type || r.hazard_type || 'Hazard Surface Incident';
 
-    // If report has no saved road name or has generic fallback text, query real corridors
     if (!r.location || r.location.startsWith('Zone') || r.location.startsWith('Local Arterial') || r.location === 'Field Zone') {
       r.location = await getAreaNameFromCoords(latNum, lngNum);
       reports[idx].location = r.location;
@@ -1584,7 +1567,6 @@ window.focusAvoidZone = function(lat, lng) {
   }
 };
 
-// Live Multi-Tab Sync
 window.addEventListener('storage', e => {
   if (e.key === 'giri_latest_report' && e.newValue) {
     try {
@@ -1739,6 +1721,9 @@ function handleLocationSelect(loc) {
     if (stateSelect) stateSelect.value = loc.stateKey;
     populateDistricts(loc.stateKey);
     map.flyTo(loc.center, loc.zoom, { duration: 1.2 });
+    if (loc.stateKey === 'mizoram') {
+      renderDendriticRidgeHeatmap(simulatedAIPredictions, true);
+    }
   } else if (
     loc.type === 'district' ||
     loc.type === 'hardware' ||
@@ -1966,16 +1951,11 @@ async function pollLiveSensorAlerts() {
             reading = sensorData.reading;
           }
         }
-      } catch (sensorError) {
-        console.warn('[Live Alert] Sensor reading unavailable:', sensorError);
-      }
+      } catch (sensorError) {}
     }
 
     showLiveSensorAlert(latestAlert, reading);
-    console.log('[LIVE SENSOR ALERT]', latestAlert, reading);
-  } catch (error) {
-    console.warn('[Live Alert] Alert polling failed:', error);
-  }
+  } catch (error) {}
 }
 
 function startLiveSensorAlertMonitoring() {
@@ -2101,7 +2081,7 @@ function renderAlertsFeed() {
 }
 
 // =========================================================================
-// 17. Authentication & Role Switcher
+// 17. Authentication & Gatekeeper Routing
 // =========================================================================
 
 let selectedRole = 'citizen';
@@ -2121,36 +2101,41 @@ function selectRole(role) {
   const btnCitizen = document.getElementById('tab-citizen');
   const btnOfficial = document.getElementById('tab-official');
   const label = document.getElementById('login-id-label');
+  const idInput = document.getElementById('login-id-input');
 
   if (role === 'official') {
     if (btnOfficial) {
       btnOfficial.style.background = '#2563eb';
-      btnOfficial.style.color = '#fff';
+      btnOfficial.style.color = '#ffffff';
     }
     if (btnCitizen) {
       btnCitizen.style.background = 'transparent';
       btnCitizen.style.color = '#94a3b8';
     }
     if (label) label.innerText = 'Official Badge / Dept ID';
+    if (idInput) idInput.placeholder = 'Enter officer ID';
   } else {
     if (btnCitizen) {
       btnCitizen.style.background = '#2563eb';
-      btnCitizen.style.color = '#fff';
+      btnCitizen.style.color = '#ffffff';
     }
     if (btnOfficial) {
       btnOfficial.style.background = 'transparent';
       btnOfficial.style.color = '#94a3b8';
     }
     if (label) label.innerText = 'Citizen Mobile / Email';
+    if (idInput) idInput.placeholder = 'Enter mobile or email';
   }
 }
 
 function submitLogin(e) {
   if (e) e.preventDefault();
   const idInput = document.getElementById('login-id-input');
-  const id = idInput ? idInput.value.trim() : '';
+  const id = idInput ? idInput.value.trim() : 'User';
+
   sessionStorage.setItem('userRole', selectedRole);
   sessionStorage.setItem('userId', id);
+
   closeLoginModal();
   applyRoleUI();
 }
@@ -2160,6 +2145,7 @@ function handleAuthAction() {
   if (currentRole) {
     sessionStorage.clear();
     applyRoleUI();
+    openLoginModal();
   } else {
     openLoginModal();
   }
@@ -2176,6 +2162,7 @@ function applyRoleUI() {
   const officialView = document.getElementById('official-view-container');
 
   if (role === 'official') {
+    closeLoginModal();
     if (publicView) publicView.style.display = 'none';
     if (officialView) officialView.style.display = 'block';
 
@@ -2195,7 +2182,9 @@ function applyRoleUI() {
         telemetryChart.resize();
       }
     }, 150);
+
   } else if (role === 'citizen') {
+    closeLoginModal();
     if (publicView) publicView.style.display = 'block';
     if (officialView) officialView.style.display = 'none';
 
@@ -2205,7 +2194,14 @@ function applyRoleUI() {
     }
     if (reportBtn) reportBtn.style.display = 'inline-block';
     if (officialPanel) officialPanel.style.display = 'none';
+    if (roleBadge) {
+      roleBadge.innerText = 'CITIZEN ACCESS';
+      roleBadge.style.color = '#38bdf8';
+    }
+
   } else {
+    openLoginModal();
+
     if (publicView) publicView.style.display = 'block';
     if (officialView) officialView.style.display = 'none';
 
@@ -2221,22 +2217,11 @@ function applyRoleUI() {
   loadSavedCitizenReports();
 }
 
-// Explicit window bindings for inline HTML triggers
 window.openLoginModal = openLoginModal;
 window.closeLoginModal = closeLoginModal;
 window.selectRole = selectRole;
 window.submitLogin = submitLogin;
 window.handleAuthAction = handleAuthAction;
-window.dispatchAlert = dispatchAlert;
-
-// Automatically adjusts Leaflet tile layout on orientation change or screen resize
-window.addEventListener('orientationchange', () => {
-  setTimeout(() => {
-    if (typeof map !== 'undefined' && map) {
-      map.invalidateSize();
-    }
-  }, 250);
-});
 
 // =========================================================================
 // 18. Dark Mode Controller
@@ -2268,7 +2253,7 @@ function initDarkMode() {
 }
 
 // =========================================================================
-// 19. Boot System & Fetch Live Feeds
+// 19. Boot System & Initial Execution
 // =========================================================================
 
 initChart();
@@ -2278,6 +2263,10 @@ syncAllRegionalLiveFeeds();
 refreshTelemetry();
 startLiveSensorAlertMonitoring();
 initDarkMode();
+
+setInterval(() => {
+  loadSavedCitizenReports();
+}, 5000);
 
 setInterval(() => {
   refreshTelemetry();

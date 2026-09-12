@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from auth import require_roles
 from database import get_db
-from models import Alert
+from models import Alert, User
 
 router = APIRouter(
     prefix="/api",

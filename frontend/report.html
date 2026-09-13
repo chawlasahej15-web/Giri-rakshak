@@ -249,6 +249,7 @@
       window.location.href = 'login.html';
     }
 
+    let selectedPhotoFile = null;
     let uploadedImageBase64 = null;
     const previewWrapper = document.getElementById('image-preview-wrapper');
     const previewImg = document.getElementById('image-preview');
@@ -258,6 +259,7 @@
     repImageInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file) {
+        selectedPhotoFile = file;
         const reader = new FileReader();
         reader.onload = (evt) => {
           uploadedImageBase64 = evt.target.result;
@@ -270,6 +272,7 @@
 
     document.getElementById('btn-remove-image').onclick = () => {
       repImageInput.value = '';
+      selectedPhotoFile = null;
       uploadedImageBase64 = null;
       previewWrapper.style.display = 'none';
       previewImg.src = '';
@@ -298,53 +301,78 @@
 
     document.getElementById('standalone-report-form').onsubmit = async (e) => {
       e.preventDefault();
-      statusMsg.innerText = "Pinning to dashboard map...";
+      statusMsg.innerText = "Transmitting report to cloud database...";
       statusMsg.style.color = "var(--accent-blue)";
 
-      const lat = parseFloat(document.getElementById('rep-lat').value);
-      const lng = parseFloat(document.getElementById('rep-lng').value);
+      const latVal = parseFloat(document.getElementById('rep-lat').value);
+      const lngVal = parseFloat(document.getElementById('rep-lng').value);
       const hazardType = document.getElementById('rep-type').value;
-      const desc = document.getElementById('rep-desc').value;
+      const descVal = document.getElementById('rep-desc').value;
       const reporter = sessionStorage.getItem('userId') || 'Citizen';
 
-      const newReport = {
-        lat: lat,
-        lng: lng,
-        type: hazardType,
-        desc: desc,
-        reporter: reporter,
-        image: uploadedImageBase64,
-        timestamp: new Date().toISOString()
-      };
+      // 1. Prepare multipart/form-data for the FastAPI backend
+      const formData = new FormData();
+      formData.append('lat', latVal);
+      formData.append('lon', lngVal);
+      formData.append('description', descVal);
+      formData.append('category', 'landslide');
+      formData.append('severity', 'high');
+
+      if (selectedPhotoFile) {
+        formData.append('photo', selectedPhotoFile);
+      }
+
+      const API_BASE = 'https://giri-rakshak-zsk5.onrender.com';
 
       try {
+        const response = await fetch(`${API_BASE}/api/citizen-report`, {
+          method: 'POST',
+          body: formData // Browser automatically assigns multipart/form-data boundary
+        });
+
+        if (!response.ok) {
+          const errDetail = await response.text();
+          console.error('Server rejected report:', response.status, errDetail);
+          statusMsg.innerText = `❌ Server Error (${response.status}). Could not save.`;
+          statusMsg.style.color = "var(--accent-red)";
+          alert(`Failed to save report to database: ${errDetail}`);
+          return;
+        }
+
+        const savedData = await response.json();
+        console.log('Saved to Supabase successfully:', savedData);
+
+        // 2. Cache locally for instant UI responsiveness
+        const newReport = {
+          id: savedData.id || ('cit_' + Date.now()),
+          lat: latVal,
+          lng: lngVal,
+          type: hazardType,
+          desc: descVal,
+          reporter: reporter,
+          image: savedData.photo_path ? `${API_BASE}${savedData.photo_path}` : uploadedImageBase64,
+          timestamp: new Date().toISOString()
+        };
+
         const list = JSON.parse(localStorage.getItem('giri_citizen_reports') || '[]');
         list.push(newReport);
         localStorage.setItem('giri_citizen_reports', JSON.stringify(list));
         localStorage.setItem('giri_latest_report', JSON.stringify(newReport));
         sessionStorage.setItem('just_reported', 'true');
-      } catch (err) {
-        console.warn('Storage failed:', err);
+
+        statusMsg.innerText = "✅ Incident saved to database! Returning to map...";
+        statusMsg.style.color = "var(--accent-green)";
+
+        setTimeout(() => {
+          window.location.href = "index.html";
+        }, 800);
+
+      } catch (networkErr) {
+        console.error('Network failure:', networkErr);
+        statusMsg.innerText = "❌ Network error. Check connection.";
+        statusMsg.style.color = "var(--accent-red)";
+        alert(`Network connection error: ${networkErr.message}`);
       }
-
-      const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-        ? 'https://giri-rakshak-zsk5.onrender.com'
-        : 'https://giri-rakshak-zsk5.onrender.com';
-
-      try {
-        await fetch(`${API_BASE}/api/citizen-report`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newReport)
-        });
-      } catch (err) {}
-
-      statusMsg.innerText = "✅ Incident successfully pinned! Returning to map...";
-      statusMsg.style.color = "var(--accent-green)";
-
-      setTimeout(() => {
-        window.location.href = "index.html";
-      }, 900);
     };
   </script>
 </body>

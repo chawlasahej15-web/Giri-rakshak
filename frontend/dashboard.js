@@ -377,8 +377,6 @@ const nerData = {
   }
 };
 
-const seedCitizenReports = [];
-
 const translations = {
   en: "Warning: High landslide hazard detected on slope cuts. Evacuate immediately.",
   mz: "Fimkhurna: He laiah hian leimin hlauhawm a awm. Kham bul atangin inthiarfihlim vat rawh u.",
@@ -713,24 +711,20 @@ function renderBackendRiskZones(zones) {
 // =========================================================================
 
 const simulatedAIPredictions = [
-  // Aizawl Ridgeline Cluster (High/Critical Hazards)
   { lat: 23.7420, lon: 92.7170, probability: 0.96 },
   { lat: 23.7415, lon: 92.7168, probability: 0.94 },
   { lat: 23.7425, lon: 92.7173, probability: 0.91 },
   { lat: 23.7410, lon: 92.7165, probability: 0.88 },
   { lat: 23.7430, lon: 92.7178, probability: 0.85 },
   { lat: 23.7405, lon: 92.7160, probability: 0.79 },
-  // Ramhlun Corridor
   { lat: 23.7550, lon: 92.7290, probability: 0.89 },
   { lat: 23.7545, lon: 92.7285, probability: 0.87 },
   { lat: 23.7558, lon: 92.7295, probability: 0.84 },
   { lat: 23.7538, lon: 92.7280, probability: 0.81 },
   { lat: 23.7565, lon: 92.7302, probability: 0.74 },
-  // Bawngkawn Junction
   { lat: 23.7630, lon: 92.7360, probability: 0.76 },
   { lat: 23.7622, lon: 92.7355, probability: 0.72 },
   { lat: 23.7638, lon: 92.7368, probability: 0.68 },
-  // Valley Baselines
   { lat: 23.7290, lon: 92.7380, probability: 0.55 },
   { lat: 23.7310, lon: 92.7395, probability: 0.52 },
   { lat: 23.7275, lon: 92.7365, probability: 0.49 },
@@ -744,9 +738,7 @@ function renderDendriticRidgeHeatmap(points = simulatedAIPredictions, autoFocus 
     heatLayerInstance = null;
   }
 
-  // Safety fallback if leaflet-heat has not evaluated yet
   if (typeof L.heatLayer !== 'function') {
-    console.warn('[GiriRakshak] leaflet-heat not ready in DOM. Injecting script dynamically...');
     const s = document.createElement('script');
     s.src = 'https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js';
     s.onload = () => renderDendriticRidgeHeatmap(points, autoFocus);
@@ -754,7 +746,6 @@ function renderDendriticRidgeHeatmap(points = simulatedAIPredictions, autoFocus 
     return;
   }
 
-  // [latitude, longitude, intensity]
   const heatData = points.map(pt => [
     parseFloat(pt.lat),
     parseFloat(pt.lon || pt.lng),
@@ -770,11 +761,11 @@ function renderDendriticRidgeHeatmap(points = simulatedAIPredictions, autoFocus 
     max: 1.0,
     minOpacity: 0.55,
     gradient: {
-      0.20: '#38bdf8', // Stable Cyan
-      0.45: '#f97316', // Watch Orange
-      0.68: '#ea580c', // High Deep Orange
-      0.82: '#dc2626', // Very High Red
-      0.95: '#7f1d1d'  // Critical Crimson
+      0.20: '#38bdf8',
+      0.45: '#f97316',
+      0.68: '#ea580c',
+      0.82: '#dc2626',
+      0.95: '#7f1d1d'
     }
   });
 
@@ -1276,7 +1267,7 @@ async function getAreaNameFromCoords(lat, lng) {
 }
 
 // =========================================================================
-// 14. Citizen Field Incident & Routes to Avoid Sync Engine (Cross-Device)
+// 14. Citizen Field Incident & Routes to Avoid Sync Engine (Universal Delete)
 // =========================================================================
 
 function renderCitizenMarker(lat, lng, type, desc, image, shouldFly, id, reporter, locationName) {
@@ -1285,11 +1276,7 @@ function renderCitizenMarker(lat, lng, type, desc, image, shouldFly, id, reporte
 
   if (isNaN(validLat) || isNaN(validLng) || typeof citizenMarkerGroup === 'undefined') return;
 
-  const role = sessionStorage.getItem('userRole');
-  const currentUserId = sessionStorage.getItem('userId');
-  const isOfficial = role === 'official';
-  const isAuthor = role === 'citizen' && reporter && currentUserId && reporter === currentUserId;
-  const canDelete = isOfficial || isAuthor;
+  const resolvedId = String(id || `cit_${validLat}_${validLng}`);
 
   const citIcon = L.divIcon({
     html: `<div style="background: #0284c7; border: 2px solid white; width: 14px; height: 14px; border-radius: 3px; box-shadow: 0 0 6px rgba(0,0,0,0.4); cursor: pointer;"></div>`,
@@ -1306,16 +1293,10 @@ function renderCitizenMarker(lat, lng, type, desc, image, shouldFly, id, reporte
       ${desc ? `<div style="margin: 4px 0; color: #475569; font-style: italic;">"${desc}"</div>` : ''}
       ${reporter ? `<div style="font-size: 11px; color: #64748b;">Reported by: ${reporter}</div>` : ''}
       ${image ? `<img src="${image}" style="width: 100%; height: 90px; object-fit: cover; border-radius: 4px; margin-top: 6px;" />` : ''}
-      ${
-        canDelete && id
-          ? `
-        <button type="button" onclick="window.deleteCitizenReport('${id}')" 
-          style="margin-top: 8px; width: 100%; background: #ef4444; color: #fff; border: none; border-radius: 4px; padding: 6px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
-          🗑️ Delete Pin ${isOfficial ? '(Official Override)' : ''}
-        </button>
-      `
-          : ''
-      }
+      <button type="button" onclick="window.deleteCitizenReport('${resolvedId}')" 
+        style="margin-top: 10px; width: 100%; background: #dc2626; color: #ffffff; border: none; border-radius: 4px; padding: 7px 10px; font-size: 11px; font-weight: bold; cursor: pointer; display: block; text-align: center;">
+        🗑️ Delete Pin
+      </button>
     </div>
   `;
 
@@ -1330,14 +1311,25 @@ function renderCitizenMarker(lat, lng, type, desc, image, shouldFly, id, reporte
   }
 }
 
-window.deleteCitizenReport = function(reportId) {
+window.deleteCitizenReport = async function(reportId) {
   if (!confirm('Are you sure you want to remove this citizen incident report?')) return;
 
+  // 1. Delete from Render backend if present
+  try {
+    await fetch(`${getApiBase()}/api/reports/${encodeURIComponent(reportId)}`, {
+      method: 'DELETE'
+    });
+  } catch (err) {
+    console.warn('[Citizen Sync] Cloud deletion error (proceeding to local removal):', err);
+  }
+
+  // 2. Delete from browser cache
   let reports = JSON.parse(localStorage.getItem('giri_citizen_reports') || '[]');
-  reports = reports.filter(r => String(r.id) !== String(reportId));
+  reports = reports.filter(r => String(r.id) !== String(reportId) && String(r.lat) !== String(reportId));
   localStorage.setItem('giri_citizen_reports', JSON.stringify(reports));
 
-  loadSavedCitizenReports();
+  // 3. Immediately update UI
+  await loadSavedCitizenReports();
 };
 
 window.clearAllCitizenReports = function() {
@@ -1362,12 +1354,22 @@ async function loadSavedCitizenReports() {
       if (response.ok) {
         const cloudReports = await response.json();
         if (Array.isArray(cloudReports)) {
-          storedReports = cloudReports;
+          storedReports = cloudReports.map(r => ({
+            id: r.id,
+            lat: r.lat ?? r.latitude,
+            lng: r.lon ?? r.lng ?? r.longitude,
+            type: r.category ? r.category.replace(/_/g, ' ') : (r.type || r.hazard_type || "Ground Incident"),
+            desc: r.description || r.desc || "",
+            reporter: r.reporter || (r.user_id ? `Citizen #${r.user_id}` : 'Field Citizen'),
+            location: r.location || r.place || null,
+            image: r.photo_path ? `${getApiBase()}${r.photo_path}` : r.image,
+            timestamp: r.reported_at || r.timestamp
+          }));
           localStorage.setItem('giri_citizen_reports', JSON.stringify(storedReports));
         }
       }
     } catch (apiErr) {
-      console.warn('[Citizen Sync] Render fetch failed, falling back to localStorage:', apiErr);
+      console.warn('[Citizen Sync] Render fetch failed, using local storage fallback:', apiErr);
     }
 
     // 2. Fallback to localStorage if offline or network fails
@@ -1377,26 +1379,14 @@ async function loadSavedCitizenReports() {
 
     const isRedirect = sessionStorage.getItem('just_reported') === 'true';
 
-    let hasMissingIds = false;
-    storedReports = storedReports.map((r, idx) => {
-      if (!r.id) {
-        r.id = 'cit_' + (r.timestamp ? new Date(r.timestamp).getTime() : Date.now()) + '_' + idx;
-        hasMissingIds = true;
-      }
-      return r;
-    });
-
-    if (hasMissingIds) {
-      localStorage.setItem('giri_citizen_reports', JSON.stringify(storedReports));
-    }
-
     storedReports.forEach((r, idx) => {
-      const lat = parseFloat(r.lat || r.latitude);
-      const lng = parseFloat(r.lng || r.lon || r.longitude);
-      const type = r.type || r.hazard_type || "Ground Incident";
-      const desc = r.desc || r.description || "";
+      const lat = parseFloat(r.lat);
+      const lng = parseFloat(r.lng);
+      const type = r.type || "Ground Incident";
+      const desc = r.desc || "";
       const isLatest = idx === storedReports.length - 1;
-      const locationName = r.location || r.place || null;
+      const locationName = r.location || null;
+      const reportId = r.id || `cit_${idx}`;
 
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
@@ -1407,7 +1397,7 @@ async function loadSavedCitizenReports() {
         desc,
         r.image,
         isLatest && isRedirect,
-        r.id,
+        reportId,
         r.reporter,
         locationName
       );
@@ -1424,7 +1414,6 @@ async function loadSavedCitizenReports() {
 
 function renderCitizenReportsSidebarList() {
   const role = sessionStorage.getItem('userRole');
-  const currentUserId = sessionStorage.getItem('userId');
   const reports = JSON.parse(localStorage.getItem('giri_citizen_reports') || '[]');
 
   const citizenCard = document.getElementById('citizen-reports-manage-card');
@@ -1435,21 +1424,20 @@ function renderCitizenReportsSidebarList() {
   // 1. Citizen Role View
   if (role === 'citizen') {
     if (citizenCard) citizenCard.style.display = 'block';
-    const myReports = reports.filter(r => r.reporter && currentUserId && r.reporter === currentUserId);
-    if (citizenCount) citizenCount.innerText = `${myReports.length} PINS`;
+    if (citizenCount) citizenCount.innerText = `${reports.length} PINS`;
 
     if (citizenList) {
-      if (myReports.length === 0) {
-        citizenList.innerHTML = '<p style="color: #94a3b8; font-size: 12px; margin: 0;">No active incident reports filed by you.</p>';
+      if (reports.length === 0) {
+        citizenList.innerHTML = '<p style="color: #94a3b8; font-size: 12px; margin: 0;">No active incident reports filed.</p>';
       } else {
-        citizenList.innerHTML = myReports
+        citizenList.innerHTML = reports
           .map(
             r => `
           <div style="background: #0f172a; border-left: 3px solid #0284c7; padding: 8px 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
             <div style="max-width: 80%;">
-              <strong style="font-size: 12px; color: #f8fafc;">${r.type || r.hazard_type || 'Incident'}</strong>
-              <div style="font-size: 11px; color: #cbd5e1; margin-top: 1px;">📍 ${r.location || r.place || 'Field Zone'}</div>
-              <div style="font-size: 11px; color: #94a3b8; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${r.desc || r.description || 'No description'}</div>
+              <strong style="font-size: 12px; color: #f8fafc;">${r.type || 'Incident'}</strong>
+              <div style="font-size: 11px; color: #cbd5e1; margin-top: 1px;">📍 ${r.location || 'Field Zone'}</div>
+              <div style="font-size: 11px; color: #94a3b8; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${r.desc || 'No description'}</div>
             </div>
             <button type="button" onclick="window.deleteCitizenReport('${r.id}')" style="background: #ef4444; color: #fff; border: none; border-radius: 4px; padding: 3px 6px; font-size: 11px; font-weight: bold; cursor: pointer;">✕</button>
           </div>
@@ -1472,10 +1460,10 @@ function renderCitizenReportsSidebarList() {
           r => `
         <div style="background: #1e293b; border: 1px solid #334155; border-left: 3px solid #38bdf8; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
           <div style="max-width: 75%;">
-            <strong style="font-size: 12px; font-weight: 700; color: #f8fafc; letter-spacing: 0.2px;">${r.type || r.hazard_type || 'Incident'}</strong>
-            <div style="font-size: 11px; color: #38bdf8; margin-top: 2px;">📍 ${r.location || r.place || 'Field Sector'}</div>
+            <strong style="font-size: 12px; font-weight: 700; color: #f8fafc; letter-spacing: 0.2px;">${r.type || 'Incident'}</strong>
+            <div style="font-size: 11px; color: #38bdf8; margin-top: 2px;">📍 ${r.location || 'Field Sector'}</div>
             <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">By: <span style="color: #cbd5e1;">${r.reporter || 'Field Citizen'}</span></div>
-            ${(r.desc || r.description) ? `<div style="font-size: 11px; color: #64748b; margin-top: 4px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${r.desc || r.description}</div>` : ''}
+            ${r.desc ? `<div style="font-size: 11px; color: #64748b; margin-top: 4px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${r.desc}</div>` : ''}
           </div>
           <button type="button" onclick="window.deleteCitizenReport('${r.id}')" 
             style="background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 5px; padding: 5px 10px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s ease;">
@@ -1520,8 +1508,8 @@ async function updateRoutesToAvoidView() {
   }
 
   reports.forEach(r => {
-    const lat = parseFloat(r.lat || r.latitude);
-    const lng = parseFloat(r.lng || r.lon || r.longitude);
+    const lat = parseFloat(r.lat);
+    const lng = parseFloat(r.lng);
 
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
@@ -1535,16 +1523,16 @@ async function updateRoutesToAvoidView() {
       interactive: true
     });
 
-    const areaTitle = r.location || r.place || 'Hazard Zone';
+    const areaTitle = r.location || 'Hazard Zone';
     bufferCircle.bindTooltip(`<b>⚠️ Caution: 1 km Exclusion Zone</b><br>${areaTitle}. Avoid surrounding roads.`);
     avoidZonesGroup.addLayer(bufferCircle);
   });
 
   let updatedStorage = false;
   const listItems = await Promise.all(reports.map(async (r, idx) => {
-    const latNum = parseFloat(r.lat || r.latitude);
-    const lngNum = parseFloat(r.lng || r.lon || r.longitude);
-    const type = r.type || r.hazard_type || 'Hazard Surface Incident';
+    const latNum = parseFloat(r.lat);
+    const lngNum = parseFloat(r.lng);
+    const type = r.type || 'Hazard Surface Incident';
 
     if (!r.location || r.location.startsWith('Zone') || r.location.startsWith('Local Arterial') || r.location === 'Field Zone') {
       r.location = await getAreaNameFromCoords(latNum, lngNum);
@@ -1590,11 +1578,11 @@ window.addEventListener('storage', e => {
   if (e.key === 'giri_latest_report' && e.newValue) {
     try {
       const r = JSON.parse(e.newValue);
-      const lat = parseFloat(r.lat || r.latitude);
-      const lng = parseFloat(r.lng || r.lon || r.longitude);
-      const type = r.type || r.hazard_type || "Ground Incident";
-      const desc = r.desc || r.description || "";
-      const loc = r.location || r.place || null;
+      const lat = parseFloat(r.lat);
+      const lng = parseFloat(r.lng);
+      const type = r.type || "Ground Incident";
+      const desc = r.desc || "";
+      const loc = r.location || null;
 
       renderCitizenMarker(lat, lng, type, desc, r.image, true, r.id, r.reporter, loc);
 
@@ -1984,10 +1972,10 @@ function startLiveSensorAlertMonitoring() {
 }
 
 // =========================================================================
-// 16. Operational Alerts Manager
+// 16. Operational Alerts Manager (Cloud Synchronized)
 // =========================================================================
 
-function dispatchAlert() {
+async function dispatchAlert() {
   const titleInput = document.getElementById('alert-title');
   const severitySelect = document.getElementById('alert-severity');
   const regionSelect = document.getElementById('alert-region');
@@ -2001,6 +1989,25 @@ function dispatchAlert() {
     return;
   }
 
+  // 1. Post advisory to Render cloud database
+  try {
+    await fetch(`${getApiBase()}/api/alerts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: title,
+        message: title,
+        severity: severity.toLowerCase(),
+        risk_level: severity.toLowerCase(),
+        region: region,
+        zone_id: region
+      })
+    });
+  } catch (err) {
+    console.warn('[Alerts] Cloud dispatch offline, using local queue:', err);
+  }
+
+  // 2. Add to localStorage for instant local responsiveness
   const newAlert = {
     id: 'alert_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
     title: title,
@@ -2013,15 +2020,21 @@ function dispatchAlert() {
   alerts.unshift(newAlert);
   localStorage.setItem('giri_alerts', JSON.stringify(alerts));
 
-  titleInput.value = '';
-  renderAlertsFeed();
+  if (titleInput) titleInput.value = '';
+  await renderAlertsFeed();
 }
 
-window.deleteAlert = function(alertId) {
+window.deleteAlert = async function(alertId) {
+  try {
+    await fetch(`${getApiBase()}/api/alerts/${encodeURIComponent(alertId)}`, {
+      method: 'DELETE'
+    });
+  } catch (err) {}
+
   let alerts = JSON.parse(localStorage.getItem('giri_alerts') || '[]');
   alerts = alerts.filter(a => String(a.id) !== String(alertId));
   localStorage.setItem('giri_alerts', JSON.stringify(alerts));
-  renderAlertsFeed();
+  await renderAlertsFeed();
 };
 
 window.clearAllAlerts = function() {
@@ -2029,24 +2042,36 @@ window.clearAllAlerts = function() {
   renderAlertsFeed();
 };
 
-function renderAlertsFeed() {
+async function renderAlertsFeed() {
   const officialContainer = document.getElementById('alerts-feed-container');
   const publicContainer = document.getElementById('public-alerts-feed');
   const officialBadge = document.getElementById('active-alert-count');
   const publicBadge = document.getElementById('public-alert-count');
 
-  let alerts = JSON.parse(localStorage.getItem('giri_alerts') || '[]');
+  let alerts = [];
 
-  let updated = false;
-  alerts = alerts.map((a, idx) => {
-    if (!a.id) {
-      a.id = 'alert_' + Date.now() + '_' + idx;
-      updated = true;
+  // 1. Fetch live broadcast advisories from Render backend
+  try {
+    const res = await fetch(`${getApiBase()}/api/alerts/recent`, { cache: 'no-store' });
+    if (res.ok) {
+      const cloudAlerts = await res.json();
+      if (Array.isArray(cloudAlerts) && cloudAlerts.length > 0) {
+        alerts = cloudAlerts.map(a => ({
+          id: a.id || a.alert_id,
+          title: a.title || a.message,
+          severity: a.severity || a.risk_level || 'warning',
+          region: a.region || a.zone_id || 'All NER States',
+          timestamp: a.timestamp ? formatSensorTime(a.timestamp) : 'Live'
+        }));
+      }
     }
-    return a;
-  });
-  if (updated) {
-    localStorage.setItem('giri_alerts', JSON.stringify(alerts));
+  } catch (e) {
+    console.warn('[Alerts] Could not pull from Render, checking local fallback.');
+  }
+
+  // 2. Fallback to localStorage if cloud returns nothing
+  if (alerts.length === 0) {
+    alerts = JSON.parse(localStorage.getItem('giri_alerts') || '[]');
   }
 
   if (officialBadge) officialBadge.innerText = `${alerts.length} ACTIVE`;
@@ -2078,7 +2103,7 @@ function renderAlertsFeed() {
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 11px; color: #94a3b8;">${a.timestamp || ''}</span>
             ${
-              isOfficial
+              isOfficial && a.id
                 ? `
               <button type="button" onclick="window.deleteAlert('${a.id}')" title="Delete Alert" 
                 style="background: #ef4444; color: #ffffff; border: none; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; padding: 3px 8px; display: inline-flex; align-items: center; line-height: 1;">
@@ -2283,8 +2308,10 @@ refreshTelemetry();
 startLiveSensorAlertMonitoring();
 initDarkMode();
 
+// Live Polling Intervals: Pull reports, alerts, and telemetry every few seconds
 setInterval(() => {
   loadSavedCitizenReports();
+  renderAlertsFeed();
 }, 5000);
 
 setInterval(() => {

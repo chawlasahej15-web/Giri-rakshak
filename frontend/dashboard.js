@@ -1346,13 +1346,35 @@ window.clearAllCitizenReports = function() {
   loadSavedCitizenReports();
 };
 
-function loadSavedCitizenReports() {
+async function loadSavedCitizenReports() {
   try {
     if (typeof citizenMarkerGroup !== 'undefined') {
       citizenMarkerGroup.clearLayers();
     }
 
-    let storedReports = JSON.parse(localStorage.getItem('giri_citizen_reports') || '[]');
+    let storedReports = [];
+
+    // 1. Fetch real-time reports from Render backend
+    try {
+      const response = await fetch(`${getApiBase()}/api/citizen-reports`, { 
+        cache: 'no-store' 
+      });
+      if (response.ok) {
+        const cloudReports = await response.json();
+        if (Array.isArray(cloudReports)) {
+          storedReports = cloudReports;
+          localStorage.setItem('giri_citizen_reports', JSON.stringify(storedReports));
+        }
+      }
+    } catch (apiErr) {
+      console.warn('[Citizen Sync] Render fetch failed, falling back to localStorage:', apiErr);
+    }
+
+    // 2. Fallback to localStorage if offline or network fails
+    if (storedReports.length === 0) {
+      storedReports = JSON.parse(localStorage.getItem('giri_citizen_reports') || '[]');
+    }
+
     const isRedirect = sessionStorage.getItem('just_reported') === 'true';
 
     let hasMissingIds = false;
@@ -1369,12 +1391,14 @@ function loadSavedCitizenReports() {
     }
 
     storedReports.forEach((r, idx) => {
-      const lat = r.lat || r.latitude;
-      const lng = r.lng || r.lon || r.longitude;
+      const lat = parseFloat(r.lat || r.latitude);
+      const lng = parseFloat(r.lng || r.lon || r.longitude);
       const type = r.type || r.hazard_type || "Ground Incident";
       const desc = r.desc || r.description || "";
       const isLatest = idx === storedReports.length - 1;
       const locationName = r.location || r.place || null;
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
       renderCitizenMarker(
         lat,

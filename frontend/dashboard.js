@@ -541,12 +541,7 @@ let selectedBackendZoneId = null;
 let telemetryViewMode = 'overview';
 
 function getApiBase() {
-  return (
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1'
-  )
-    ? 'https://giri-rakshak-zsk5.onrender.com'
-    : `${window.location.protocol}//${window.location.hostname}:8000`;
+  return 'https://giri-rakshak-zsk5.onrender.com';
 }
 
 async function loadBackendRiskZones() {

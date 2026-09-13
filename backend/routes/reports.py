@@ -119,3 +119,19 @@ def get_all_citizen_reports(db: Session = Depends(get_db)):
         .order_by(CitizenReport.reported_at.desc())
         .all()
     )
+
+
+@router.delete("/reports/{report_id}")
+def delete_citizen_report(report_id: str, db: Session = Depends(get_db)):
+    # Safely delete if it is an actual database integer ID
+    if report_id.isdigit():
+        numeric_id = int(report_id)
+        report = db.query(CitizenReport).filter(CitizenReport.id == numeric_id).first()
+        if report:
+            db.query(ReportUpdate).filter(ReportUpdate.report_id == numeric_id).delete()
+            db.delete(report)
+            db.commit()
+            return {"status": "ok", "message": f"Report {numeric_id} deleted successfully"}
+
+    # Return success for local/fallback string IDs so the frontend can still purge cleanly
+    return {"status": "ok", "message": f"Purged local identifier {report_id}"}

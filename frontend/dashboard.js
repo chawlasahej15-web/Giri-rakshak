@@ -1211,18 +1211,20 @@ if (btnTriggerAlert) {
 // =========================================================================
 
 async function getAreaNameFromCoords(lat, lng) {
+  // 1. Primary: Overpass API with strict 3-second client abort
   try {
-    const overpassQuery = `
-      [out:json][timeout:5];
-      way(around:1000,${lat},${lng})[highway][name];
-      out tags 5;
-    `;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const overpassQuery = `[out:json][timeout:3];way(around:1000,${lat},${lng})[highway][name];out tags 5;`;
     const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
-    
-    const res = await fetch(overpassUrl);
+
+    const res = await fetch(overpassUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
     if (res.ok) {
       const data = await res.json();
-      if (data && data.elements && data.elements.length > 0) {
+      if (data?.elements?.length > 0) {
         const roadNames = [];
         data.elements.forEach(el => {
           const name = el.tags?.name || el.tags?.ref;
@@ -1237,31 +1239,46 @@ async function getAreaNameFromCoords(lat, lng) {
       }
     }
   } catch (err) {
-    console.warn('[Overpass Road Search] Failed, falling back...', err);
+    // Graceful silent fallback without blocking UI thread
   }
 
+  // 2. Secondary: Nominatim Reverse Geocoding with 2.5-second client abort
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
+
     const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`;
-    const res = await fetch(nominatimUrl, { headers: { 'Accept': 'application/json' } });
+    const res = await fetch(nominatimUrl, {
+      headers: { 'Accept': 'application/json' },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
     if (res.ok) {
       const data = await res.json();
       const addr = data.address || {};
       const road = addr.road || addr.highway || addr.pedestrian || addr.street;
       const suburb = addr.suburb || addr.neighbourhood || addr.village || addr.city_district || addr.town;
-      
+
       if (road && suburb) return `${road}, ${suburb}`;
       if (road) return road;
       if (suburb) return `${suburb} Corridor`;
       if (data.name) return data.name;
     }
   } catch (e) {
-    console.warn('[Nominatim Fallback Failed]', e);
+    // Fall through to regional coordinates table
   }
 
-  if (lat >= 23.6 && lat <= 23.85 && lng >= 92.65 && lng <= 92.8) return "NH-54 / Aizawl Bypass Arteries";
-  if (lat >= 25.8 && lat <= 26.0 && lng >= 93.6 && lng <= 93.9) return "NH-29 (Dimapur-Kohima Gorge Corridor)";
-  if (lat >= 25.6 && lat <= 25.75 && lng >= 94.05 && lng <= 94.2) return "NH-02 / Kohima Bypass Link";
-  if (lat >= 27.25 && lat <= 27.45 && lng >= 88.55 && lng <= 88.65) return "NH-10 / Gangtok-Siliguri Highway";
+  // 3. Instant Fallback: Geotechnical corridor boundary table
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+
+  if (latNum >= 23.6 && latNum <= 23.85 && lngNum >= 92.65 && lngNum <= 92.8) return "NH-54 / Aizawl Bypass Arteries";
+  if (latNum >= 25.8 && latNum <= 26.0 && lngNum >= 93.6 && lngNum <= 93.9) return "NH-29 (Dimapur-Kohima Gorge Corridor)";
+  if (latNum >= 25.6 && latNum <= 25.75 && lngNum >= 94.05 && lngNum <= 94.2) return "NH-02 / Kohima Bypass Link";
+  if (latNum >= 27.25 && latNum <= 27.45 && lngNum >= 88.55 && lngNum <= 88.65) return "NH-10 / Gangtok-Siliguri Highway";
+  if (latNum >= 25.1 && latNum <= 25.25 && lngNum >= 92.95 && lngNum <= 93.15) return "Haflong Hill Section Arterial Link";
+  if (latNum >= 25.2 && latNum <= 25.4 && lngNum >= 91.65 && lngNum <= 91.8) return "SH-5 / Sohra-Shella Escarpment Highway";
 
   return "Regional Arterial Corridor";
 }

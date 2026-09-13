@@ -539,7 +539,14 @@ let selectedBackendZoneId = null;
 let telemetryViewMode = 'overview';
 
 function getApiBase() {
-  return 'https://giri-rakshak-zsk5.onrender.com';
+  if (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  ) {
+    return 'http://127.0.0.1:8000';
+  }
+
+  return 'https://giri-rakshak.onrender.com';
 }
 
 async function loadBackendRiskZones() {

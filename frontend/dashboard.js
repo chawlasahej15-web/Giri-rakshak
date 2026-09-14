@@ -2196,18 +2196,51 @@ function selectRole(role) {
   }
 }
 
-function submitLogin(e) {
+async function submitLogin(e) {
   if (e) e.preventDefault();
+
   const idInput = document.getElementById('login-id-input');
-  const id = idInput ? idInput.value.trim() : 'User';
+  const pwdInput = document.getElementById('login-pwd-input');
 
-  sessionStorage.setItem('userRole', selectedRole);
-  sessionStorage.setItem('userId', id);
+  const email = idInput ? idInput.value.trim() : '';
+  const password = pwdInput ? pwdInput.value : '';
 
-  closeLoginModal();
-  applyRoleUI();
+  if (!email || !password) {
+    alert('Please enter email and password.');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${getApiBase()}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: email,
+        password: password,
+        role: selectedRole
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.detail || 'Login failed');
+    }
+
+    sessionStorage.setItem('access_token', result.access_token);
+    sessionStorage.setItem('userRole', selectedRole);
+    sessionStorage.setItem('userId', email);
+
+    closeLoginModal();
+    applyRoleUI();
+
+  } catch (err) {
+    console.error('Login error:', err);
+    alert(err.message || 'Login failed. Please try again.');
+  }
 }
-
 function handleAuthAction() {
   const currentRole = sessionStorage.getItem('userRole');
   if (currentRole) {

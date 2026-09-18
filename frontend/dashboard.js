@@ -539,14 +539,7 @@ let selectedBackendZoneId = null;
 let telemetryViewMode = 'overview';
 
 function getApiBase() {
-  if (
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1'
-  ) {
-    return 'http://127.0.0.1:8000';
-  }
-
-  return 'https://giri-rakshak.onrender.com';
+  return 'https://giri-rakshak-zsk5.onrender.com';
 }
 
 async function loadBackendRiskZones() {
@@ -2196,51 +2189,18 @@ function selectRole(role) {
   }
 }
 
-async function submitLogin(e) {
+function submitLogin(e) {
   if (e) e.preventDefault();
-
   const idInput = document.getElementById('login-id-input');
-  const pwdInput = document.getElementById('login-pwd-input');
+  const id = idInput ? idInput.value.trim() : 'User';
 
-  const email = idInput ? idInput.value.trim() : '';
-  const password = pwdInput ? pwdInput.value : '';
+  sessionStorage.setItem('userRole', selectedRole);
+  sessionStorage.setItem('userId', id);
 
-  if (!email || !password) {
-    alert('Please enter email and password.');
-    return;
-  }
-
-  try {
-    const response = await fetch(`${getApiBase()}/api/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        email: email,
-        password: password,
-        role: selectedRole
-      })
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.detail || 'Login failed');
-    }
-
-    sessionStorage.setItem('access_token', result.access_token);
-    sessionStorage.setItem('userRole', selectedRole);
-    sessionStorage.setItem('userId', email);
-
-    closeLoginModal();
-    applyRoleUI();
-
-  } catch (err) {
-    console.error('Login error:', err);
-    alert(err.message || 'Login failed. Please try again.');
-  }
+  closeLoginModal();
+  applyRoleUI();
 }
+
 function handleAuthAction() {
   const currentRole = sessionStorage.getItem('userRole');
   if (currentRole) {

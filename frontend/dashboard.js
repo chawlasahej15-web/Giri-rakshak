@@ -4,6 +4,13 @@
 // Real-time ESP32 Pipeline + Overpass Highway Network 1 km Avoidance Corridors
 // =========================================================================
 
+// Request push permission when dashboard loads
+document.addEventListener("DOMContentLoaded", () => {
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+});
+
 const NER_CENTER = [25.8, 93.2];
 const NER_DEFAULT_ZOOM = 6;
 
@@ -2006,7 +2013,7 @@ async function dispatchAlert() {
     return;
   }
 
-  // 1. Post advisory to Render cloud database
+ // 1. Post advisory to Render cloud database
   try {
     await fetch(`${getApiBase()}/api/alerts`, {
       method: 'POST',
@@ -2037,10 +2044,19 @@ async function dispatchAlert() {
   alerts.unshift(newAlert);
   localStorage.setItem('giri_alerts', JSON.stringify(alerts));
 
+  // 3. <-- ADD THIS: TRIGGER MOBILE/BROWSER PUSH NOTIFICATION -->
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(`🚨 GIRI RAKSHAK: ${severity.toUpperCase()} ALERT`, {
+      body: `${title}\nRegion: ${region}`,
+      icon: './logo.png', // Uses logo.png in your /frontend folder
+      badge: './logo1.png',
+      vibrate: [200, 100, 200] // Causes phone to vibrate on notification trigger
+    });
+  }
+
   if (titleInput) titleInput.value = '';
   await renderAlertsFeed();
 }
-
 window.deleteAlert = async function(alertId) {
   try {
     await fetch(`${getApiBase()}/api/alerts/${encodeURIComponent(alertId)}`, {

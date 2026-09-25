@@ -244,6 +244,13 @@
   </div>
 
   <script>
+    // Request notification permission on page load
+    document.addEventListener("DOMContentLoaded", () => {
+      if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+      }
+    });
+
     const currentRole = sessionStorage.getItem('userRole');
     if (!currentRole || currentRole !== 'citizen') {
       window.location.href = 'login.html';
@@ -322,7 +329,7 @@
         formData.append('photo', selectedPhotoFile);
       }
 
-      const API_BASE = 'https://giri-rakshak-zsk5.onrender.com';
+      const API_BASE = 'http://127.0.0.1:8000';
 
       try {
         const response = await fetch(`${API_BASE}/api/citizen-report`, {
@@ -359,6 +366,16 @@
         localStorage.setItem('giri_citizen_reports', JSON.stringify(list));
         localStorage.setItem('giri_latest_report', JSON.stringify(newReport));
         sessionStorage.setItem('just_reported', 'true');
+
+        // 3. Trigger System Push Notification
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification(`⚠️ CITIZEN HAZARD REPORTED: ${hazardType.toUpperCase()}`, {
+            body: `Location: (${latVal}, ${lngVal})\n${descVal}`,
+            icon: './logo.png',
+            badge: './logo1.png',
+            vibrate: [200, 100, 200]
+          });
+        }
 
         statusMsg.innerText = "✅ Incident saved to database! Returning to map...";
         statusMsg.style.color = "var(--accent-green)";

@@ -12,6 +12,7 @@ from routes.auth import router as auth_router
 from routes.notifications import router as notifications_router
 from routes.official import router as official_router
 from routes.reports import router as reports_router
+from routes.devices import router as devices_router
 from routes.risk import router as risk_router
 from routes.sensors import router as sensors_router
 
@@ -52,8 +53,7 @@ app.include_router(notifications_router)
 app.include_router(sensors_router)
 app.include_router(risk_router)
 app.include_router(alerts_router)
-
-
+app.include_router(devices_router)
 @app.get("/")
 def root():
     return {"status": "online", "message": "GiriRakshak API v2 is running"}

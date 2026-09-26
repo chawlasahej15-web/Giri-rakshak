@@ -36,11 +36,12 @@ from models import (
     SensorReading,
     Alert,
     RiskScore,
+    DeviceToken,
 )
 
 from ml.src.predict import predict_risk
 from alerts.twilio_service import send_configured_alert
-
+from fcm_service import send_push_notification
 router = APIRouter(
     prefix="/api",
     tags=["Sensors"]
@@ -171,7 +172,6 @@ def receive_sensor_data(
     # --------------------------------------------------------
     # 3. Reactive alert
     # --------------------------------------------------------
-
     if reactive_alert:
 
         alert_message = (
@@ -179,7 +179,6 @@ def receive_sensor_data(
             "Abnormal sensor threshold detected. "
             f"Zone: {data.sensor_id}"
         )
-
         alert = Alert(
             zone_id=data.sensor_id,
             risk_level="critical",
@@ -193,7 +192,24 @@ def receive_sensor_data(
         sms_result = send_configured_alert(alert_message)
 
         print("Reactive SMS Result:", sms_result)
+        # Send push notification to registered official devices
+        official_devices = (
+            db.query(DeviceToken)
+            .filter(DeviceToken.role == "official")
+            .all()
+        )
 
+        for device in official_devices:
+            try:
+                push_result = send_push_notification(
+                    device.token,
+                    "Giri-Rakshak Critical Alert",
+                    alert_message,
+                    {"zone_id": data.sensor_id, "risk_level": "critical"},
+                )
+                print("Reactive Push Result:", push_result)
+            except Exception as e:
+                print("Reactive Push Error:", str(e))
     # --------------------------------------------------------
     # 4. ML prediction
     # --------------------------------------------------------
@@ -320,6 +336,27 @@ def receive_sensor_data(
             db.add(
                 ml_alert
             )
+            # Send push notification to registered official devices
+            official_devices = (
+                db.query(DeviceToken)
+                .filter(DeviceToken.role == "official")
+                .all()
+            )
+
+            for device in official_devices:
+                try:
+                    push_result = send_push_notification(
+                        device.token,
+                        "Giri-Rakshak ML Risk Alert",
+                        ml_alert.message,
+                        {
+                            "zone_id": str(zone_id),
+                            "risk_level": "very_high",
+                        },
+                    )
+                    print("ML Push Result:", push_result)
+                except Exception as e:
+                    print("ML Push Error:", str(e))
 
 
     except Exception as exc:

@@ -7,12 +7,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Alert
+from models import Alert, DeviceToken
 
 # Path setup for Twilio service
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from alerts.twilio_service import send_configured_alert
-
+from fcm_service import send_push_notification
 router = APIRouter(
     prefix="/api",
     tags=["Alerts"]
@@ -86,14 +86,52 @@ def delete_operational_alert(alert_id: int, db: Session = Depends(get_db)):
         db.commit()
     return {"status": "ok", "deleted": alert_id}
 
-
 @router.post("/trigger-alert")
-def trigger_alert(payload: TriggerAlertRequest):
+def trigger_alert(
+    payload: TriggerAlertRequest,
+    db: Session = Depends(get_db),
+):
+    # Keep existing SMS alert behavior
     sms_result = send_configured_alert(payload.message)
+
+    # Get all registered official devices
+    official_devices = (
+        db.query(DeviceToken)
+        .filter(DeviceToken.role == "official")
+        .all()
+    )
+
+    push_results = []
+
+    for device in official_devices:
+        try:
+            result = send_push_notification(
+                token=device.token,
+                title=f"Giri Rakshak: {payload.risk_level}",
+                body=payload.message,
+                data={
+                    "zone_id": payload.zone_id,
+                    "risk_level": payload.risk_level,
+                },
+            )
+
+            push_results.append({
+                "device_id": device.id,
+                "success": True,
+                "message_id": result["message_id"],
+            })
+
+        except Exception as exc:
+            push_results.append({
+                "device_id": device.id,
+                "success": False,
+                "error": str(exc),
+            })
 
     return {
         "status": "sent" if sms_result.get("success") else "failed",
         "zone_id": payload.zone_id,
         "risk_level": payload.risk_level,
         "sms_result": sms_result,
+        "push_results": push_results,
     }

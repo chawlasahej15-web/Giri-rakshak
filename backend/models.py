@@ -160,3 +160,11 @@ class Notification(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
 
     user = relationship("User", back_populates="notifications")
+class DeviceToken(Base):
+    __tablename__ = "device_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    token = Column(String(512), unique=True, nullable=False, index=True)
+    role = Column(String(20), nullable=False, default="official", index=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)

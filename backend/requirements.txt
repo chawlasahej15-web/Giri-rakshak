@@ -31,5 +31,4 @@ twilio
 python-dotenv
 
 rio-tiler
-
-rio-tiler
+firebase-admin

@@ -28,3 +28,5 @@ backend/giri_rakshak_before_migration.db
 backend_backup/
 backend_upgrade/
 where
+
+backend/firebase-service-account.json

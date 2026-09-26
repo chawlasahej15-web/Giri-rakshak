@@ -11,13 +11,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-const NER_CENTER = [25.8, 93.2];
-const NER_DEFAULT_ZOOM = 6;
+const INDIA_CENTER = [20.5937, 78.9629];
+const INDIA_DEFAULT_ZOOM = 5;
 
 // 1. Initialize Map
 const map = L.map('map', {
-  center: NER_CENTER,
-  zoom: NER_DEFAULT_ZOOM,
+  center: INDIA_CENTER,
+  zoom: INDIA_DEFAULT_ZOOM,
   zoomControl: false
 });
 
@@ -793,6 +793,8 @@ function renderAllNEROverview() {
   hardwareMarkerGroup.clearLayers();
   citizenMarkerGroup.clearLayers();
 
+  const role = sessionStorage.getItem('userRole');
+
   Object.keys(nerData).forEach(stateKey => {
     const state = nerData[stateKey];
     if (state.boundary) {
@@ -815,22 +817,25 @@ function renderAllNEROverview() {
     }
   });
 
-  const aizawlDist = nerData.mizoram.districts.aizawl;
-  const espIcon = L.divIcon({
-    html: `<div style="background: #7c3aed; border: 2.5px solid white; width: 16px; height: 16px; border-radius: 50%; box-shadow: 0 0 10px rgba(124, 58, 237, 0.85); cursor: pointer;"></div>`,
-    iconSize: [16, 16]
-  });
+  // ONLY show ESP32 Physical Station pin for Official Logins
+  if (role === 'official') {
+    const aizawlDist = nerData.mizoram.districts.aizawl;
+    const espIcon = L.divIcon({
+      html: `<div style="background: #7c3aed; border: 2.5px solid white; width: 16px; height: 16px; border-radius: 50%; box-shadow: 0 0 10px rgba(124, 58, 237, 0.85); cursor: pointer;"></div>`,
+      iconSize: [16, 16]
+    });
 
-  const singleEspMarker = L.marker(aizawlDist.sensorCoords, { icon: espIcon });
-  singleEspMarker.bindTooltip("<b>STAGE DEMONSTRATION NODE</b><br/>Aizawl ESP32 Edge Station (Live Telemetry)", { permanent: false });
-  singleEspMarker.on('click', () => {
-    stateSelect.value = 'mizoram';
-    populateDistricts('mizoram');
-    districtSelect.value = 'aizawl';
-    updateDistrictView('mizoram', 'aizawl');
-  });
+    const singleEspMarker = L.marker(aizawlDist.sensorCoords, { icon: espIcon });
+    singleEspMarker.bindTooltip("<b>MONITORING STATION</b><br/>Aizawl Field Telemetry Node", { permanent: false });
+    singleEspMarker.on('click', () => {
+      stateSelect.value = 'mizoram';
+      populateDistricts('mizoram');
+      districtSelect.value = 'aizawl';
+      updateDistrictView('mizoram', 'aizawl');
+    });
 
-  hardwareMarkerGroup.addLayer(singleEspMarker);
+    hardwareMarkerGroup.addLayer(singleEspMarker);
+  }
 
   renderDendriticRidgeHeatmap(simulatedAIPredictions, false);
   loadSavedCitizenReports();
@@ -1105,15 +1110,20 @@ function populateDistricts(selectedState) {
     return;
   }
 
+  const role = sessionStorage.getItem('userRole');
   const dists = nerData[selectedState].districts;
+
   Object.keys(dists).forEach(distKey => {
     const opt = document.createElement('option');
     opt.value = distKey;
-    opt.innerText =
-      dists[distKey].name +
-      (dists[distKey].isHardwareNode
-        ? " 🟣 [Live ESP32 Station]"
-        : " (Live Weather Model)");
+    
+    // Clean district names for citizens; include technical tags for officials
+    if (role === 'official') {
+      opt.innerText = dists[distKey].name + (dists[distKey].isHardwareNode ? " [IoT Station]" : " (Weather Model)");
+    } else {
+      opt.innerText = dists[distKey].name;
+    }
+
     districtSelect.appendChild(opt);
   });
 
@@ -1132,7 +1142,7 @@ if (stateSelect) {
         districtSelect.innerHTML = '<option value="">-- Select District --</option>';
         districtSelect.disabled = true;
       }
-      map.flyTo(NER_CENTER, NER_DEFAULT_ZOOM);
+      map.flyTo(INDIA_CENTER, INDIA_DEFAULT_ZOOM);
       renderAllNEROverview();
       return;
     }
@@ -1169,7 +1179,7 @@ if (btnResetView) {
       districtSelect.disabled = true;
     }
 
-    map.flyTo(NER_CENTER, NER_DEFAULT_ZOOM);
+    map.flyTo(INDIA_CENTER, INDIA_DEFAULT_ZOOM);
     renderAllNEROverview();
   });
 }
@@ -1311,7 +1321,7 @@ function renderCitizenMarker(lat, lng, type, desc, image, shouldFly, id, reporte
 
   const popupContent = `
     <div style="min-width: 200px; font-family: system-ui, sans-serif; font-size: 12px;">
-      <div style="font-weight: 700; color: #ef4444; margin-bottom: 4px;">⚠️ Citizen Hazard Report</div>
+      <div style="font-weight: 700; color: #ef4444; margin-bottom: 4px;">Citizen Hazard Report</div>
       ${locationName ? `<div><b>Location:</b> ${locationName}</div>` : ''}
       <div><b>Type:</b> ${type}</div>
       ${desc ? `<div style="margin: 4px 0; color: #475569; font-style: italic;">"${desc}"</div>` : ''}
@@ -1319,7 +1329,7 @@ function renderCitizenMarker(lat, lng, type, desc, image, shouldFly, id, reporte
       ${image ? `<img src="${image}" style="width: 100%; height: 90px; object-fit: cover; border-radius: 4px; margin-top: 6px;" />` : ''}
       <button type="button" onclick="window.deleteCitizenReport('${resolvedId}')" 
         style="margin-top: 10px; width: 100%; background: #dc2626; color: #ffffff; border: none; border-radius: 4px; padding: 7px 10px; font-size: 11px; font-weight: bold; cursor: pointer; display: block; text-align: center;">
-        🗑️ Delete Pin
+        Delete Pin
       </button>
     </div>
   `;
@@ -1460,7 +1470,7 @@ function renderCitizenReportsSidebarList() {
           <div style="background: #0f172a; border-left: 3px solid #0284c7; padding: 8px 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
             <div style="max-width: 80%;">
               <strong style="font-size: 12px; color: #f8fafc;">${r.type || 'Incident'}</strong>
-              <div style="font-size: 11px; color: #cbd5e1; margin-top: 1px;">📍 ${r.location || 'Field Zone'}</div>
+              <div style="font-size: 11px; color: #cbd5e1; margin-top: 1px;">Location: ${r.location || 'Field Zone'}</div>
               <div style="font-size: 11px; color: #94a3b8; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${r.desc || 'No description'}</div>
             </div>
             <button type="button" onclick="window.deleteCitizenReport('${r.id}')" style="background: #ef4444; color: #fff; border: none; border-radius: 4px; padding: 3px 6px; font-size: 11px; font-weight: bold; cursor: pointer;">✕</button>
@@ -1485,7 +1495,7 @@ function renderCitizenReportsSidebarList() {
         <div style="background: #1e293b; border: 1px solid #334155; border-left: 3px solid #38bdf8; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
           <div style="max-width: 75%;">
             <strong style="font-size: 12px; font-weight: 700; color: #f8fafc; letter-spacing: 0.2px;">${r.type || 'Incident'}</strong>
-            <div style="font-size: 11px; color: #38bdf8; margin-top: 2px;">📍 ${r.location || 'Field Sector'}</div>
+            <div style="font-size: 11px; color: #38bdf8; margin-top: 2px;">Location: ${r.location || 'Field Sector'}</div>
             <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">By: <span style="color: #cbd5e1;">${r.reporter || 'Field Citizen'}</span></div>
             ${r.desc ? `<div style="font-size: 11px; color: #64748b; margin-top: 4px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${r.desc}</div>` : ''}
           </div>
@@ -1548,7 +1558,7 @@ async function updateRoutesToAvoidView() {
     });
 
     const areaTitle = r.location || 'Hazard Zone';
-    bufferCircle.bindTooltip(`<b>⚠️ Caution: 1 km Exclusion Zone</b><br>${areaTitle}. Avoid surrounding roads.`);
+    bufferCircle.bindTooltip(`<b>Caution: 1 km Exclusion Zone</b><br>${areaTitle}. Avoid surrounding roads.`);
     avoidZonesGroup.addLayer(bufferCircle);
   });
 
@@ -1570,11 +1580,11 @@ async function updateRoutesToAvoidView() {
       <div style="background: var(--panel-bg, #ffffff); border: 1px solid var(--panel-border, #e2e8f0); border-left: 4px solid #dc2626; border-radius: 6px; padding: 8px 10px; cursor: pointer; margin-bottom: 6px;"
            onclick="window.focusAvoidZone(${latNum}, ${lngNum})">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <strong style="font-size: 12px; color: #dc2626;">🚫 Avoid 1 km Perimeter</strong>
+          <strong style="font-size: 12px; color: #dc2626;">Avoid 1 km Perimeter</strong>
           <span style="font-size: 10px; color: #64748b; font-weight: 600;">Sector #${idx + 1}</span>
         </div>
         <div style="font-size: 12px; font-weight: 700; color: var(--text-main, #0f172a); margin-top: 3px;">
-          🛣️ ${roadName}
+          ${roadName}
         </div>
         <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
           Hazard: ${type}
@@ -1850,7 +1860,7 @@ function ensureLiveSensorAlertUI() {
   alertBox.id = 'live-sensor-alert';
   alertBox.className = 'live-sensor-alert hidden';
   alertBox.innerHTML = `
-    <div class="live-alert-icon">🚨</div>
+    <div class="live-alert-icon">⚠️</div>
     <div class="live-alert-content">
       <div class="live-alert-title">LIVE SENSOR ALERT</div>
       <div id="live-alert-zone" class="live-alert-zone">ESP32 Edge Node</div>
@@ -2013,7 +2023,7 @@ async function dispatchAlert() {
     return;
   }
 
- // 1. Post advisory to Render cloud database
+  // 1. Post advisory to Render cloud database
   try {
     await fetch(`${getApiBase()}/api/alerts`, {
       method: 'POST',
@@ -2044,19 +2054,20 @@ async function dispatchAlert() {
   alerts.unshift(newAlert);
   localStorage.setItem('giri_alerts', JSON.stringify(alerts));
 
-  // 3. <-- ADD THIS: TRIGGER MOBILE/BROWSER PUSH NOTIFICATION -->
+  // 3. Trigger Push Notification
   if ("Notification" in window && Notification.permission === "granted") {
-    new Notification(`🚨 GIRI RAKSHAK: ${severity.toUpperCase()} ALERT`, {
+    new Notification(`GIRI RAKSHAK: ${severity.toUpperCase()} ALERT`, {
       body: `${title}\nRegion: ${region}`,
-      icon: './logo.png', // Uses logo.png in your /frontend folder
+      icon: './logo.png',
       badge: './logo1.png',
-      vibrate: [200, 100, 200] // Causes phone to vibrate on notification trigger
+      vibrate: [200, 100, 200]
     });
   }
 
   if (titleInput) titleInput.value = '';
   await renderAlertsFeed();
 }
+
 window.deleteAlert = async function(alertId) {
   try {
     await fetch(`${getApiBase()}/api/alerts/${encodeURIComponent(alertId)}`, {
@@ -2147,7 +2158,7 @@ async function renderAlertsFeed() {
           </div>
         </div>
         <div style="font-size: 13px; font-weight: 600; color: #f8fafc; line-height: 1.3;">${a.title}</div>
-        <div style="font-size: 11px; color: #38bdf8; margin-top: 4px;">📍 Coverage: ${a.region || 'All NER States'}</div>
+        <div style="font-size: 11px; color: #38bdf8; margin-top: 4px;">Location Coverage: ${a.region || 'All NER States'}</div>
       </div>
     `;
     })
@@ -2237,6 +2248,19 @@ function applyRoleUI() {
 
   const publicView = document.getElementById('public-view-container');
   const officialView = document.getElementById('official-view-container');
+  const systemStatusPill = document.querySelector('.system-status-pill');
+  const legendEsp32Item = document.getElementById('legend-esp32') || document.querySelector('.legend-esp32-item');
+
+  // Role-based visibility for system status pill badge & legend hardware item
+  if (systemStatusPill) {
+    systemStatusPill.style.display = (role === 'citizen') ? 'none' : 'inline-flex';
+  }
+  if (legendEsp32Item) {
+    legendEsp32Item.style.display = (role === 'citizen') ? 'none' : 'flex';
+  }
+
+  // Re-render map layers to apply role-specific pin visibility
+  renderAllNEROverview();
 
   if (role === 'official') {
     closeLoginModal();
@@ -2314,7 +2338,7 @@ function initDarkMode() {
 
   if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
     document.body.classList.add('dark-mode');
-    if (icon) icon.innerText = '☀️';
+    if (icon) icon.innerText = 'Theme:';
     if (label) label.innerText = 'Light';
   }
 
@@ -2323,7 +2347,7 @@ function initDarkMode() {
       const isDark = document.body.classList.toggle('dark-mode');
       localStorage.setItem('giri_theme', isDark ? 'dark' : 'light');
 
-      if (icon) icon.innerText = isDark ? '☀️' : '🌙';
+      if (icon) icon.innerText = 'Theme:';
       if (label) label.innerText = isDark ? 'Light' : 'Dark';
     });
   }

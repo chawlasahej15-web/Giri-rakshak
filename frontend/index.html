@@ -67,7 +67,7 @@
           <span class="filter-icon">🌐</span>
           <div>
             <strong>Landslide Warning System</strong>
-            <small id="current-forecast-date">Regional Model + Aizawl IoT Node</small>
+            <small id="current-forecast-date">National EWS & IoT Telemetry</small>
           </div>
         </div>
 
@@ -76,7 +76,7 @@
             <label for="state-select">Select State</label>
             <select id="state-select" class="custom-select">
               <option value="">-- All 8 NER States --</option>
-              <option value="mizoram">Mizoram (Live ESP32 Node)</option>
+              <option value="mizoram">Mizoram</option>
               <option value="nagaland">Nagaland</option>
               <option value="sikkim">Sikkim</option>
               <option value="assam">Assam</option>
@@ -104,7 +104,7 @@
         <div class="legend-item"><span class="dot very-high"></span> Very High (Red)</div>
         <div class="legend-item"><span class="dot extreme"></span> Critical / Immediate Risk (Dark Red)</div>
         <hr />
-        <div class="legend-item"><span class="dot sensor"></span> <b>Aizawl ESP32 Edge Station</b> (Demo Node)</div>
+        <!-- <div class="legend-item"><span class="dot sensor"></span> <b>Aizawl ESP32 Edge Station</b> (Demo Node)</div> -->
         <div class="legend-item"><span class="dot citizen"></span> Ground Incident Pin</div>
         <div class="legend-note">Other districts display regional meteorological risk models.</div>
       </div>
@@ -123,7 +123,7 @@
             <div class="header-with-tag" style="display: flex; align-items: center; gap: 8px;">
               <h3
                 style="font-size: 13px; font-weight: 800; letter-spacing: 0.3px; margin: 0; text-transform: uppercase;">
-                ⚠️ Routes to Avoid
+                Routes to Avoid
               </h3>
               <span class="source-tag"
                 style="background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;">
@@ -307,7 +307,7 @@
 
             <button onclick="dispatchAlert()"
               style="width: 100%; background: #2563eb; color: #ffffff; border: none; padding: 10px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 12px; transition: background 0.2s;">
-              📢 Transmit Network Alert
+              Transmit Network Alert
             </button>
           </div>
         </section>
@@ -472,7 +472,7 @@
             <!-- Restyled Broadcast Button (Clean Crimson Gradient with Smooth Elevation) -->
             <button id="btn-trigger-alert" class="submit-btn"
               style="width: 100%; padding: 10px 14px; font-size: 13px; font-weight: 600; color: #ffffff; background: linear-gradient(135deg, #e11d48, #be123c); border: none; border-radius: 6px; box-shadow: 0 2px 6px rgba(225, 29, 72, 0.25); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s ease;">
-              <span>⚠️</span> Transmit Cell Broadcast
+              <span></span> Transmit Cell Broadcast
             </button>
           </div>
         </section>

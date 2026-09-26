@@ -216,7 +216,7 @@
 
       <div class="form-group">
         <label>Geolocation Stamp</label>
-        <button type="button" class="geo-btn" id="btn-gps">📍 Auto-Detect GPS Coordinates</button>
+        <button type="button" class="geo-btn" id="btn-gps"> 📍 Auto-Detect GPS Coordinates</button>
         <div class="coords-row">
           <input type="number" step="any" id="rep-lat" placeholder="Latitude" required />
           <input type="number" step="any" id="rep-lng" placeholder="Longitude" required />
@@ -237,7 +237,7 @@
         <textarea id="rep-desc" rows="3" placeholder="Describe fracture width, active seepage, or rock noise..." required></textarea>
       </div>
 
-      <button type="submit" class="submit-btn">🚀 Report Incident</button>
+      <button type="submit" class="submit-btn">Report Incident</button>
     </form>
 
     <div id="status-msg"></div>
@@ -377,7 +377,7 @@
           });
         }
 
-        statusMsg.innerText = "✅ Incident saved to database! Returning to map...";
+        statusMsg.innerText = "Incident saved to database! Returning to map...";
         statusMsg.style.color = "var(--accent-green)";
 
         setTimeout(() => {

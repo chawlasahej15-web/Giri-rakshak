@@ -966,3 +966,147 @@ body.dark-mode .logo-group svg {
 body.dark-mode .logo-group {
   background: transparent !important;
 }
+/* ================= STATIC SUSCEPTIBILITY ================= */
+
+.sus-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.sus-btn {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+  border-radius: 6px;
+  padding: 7px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sus-btn.active {
+  background: #0f172a;
+  color: white;
+  border-color: #0f172a;
+}
+
+.sus-help {
+  display: block;
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.sus-subtitle {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.sus-selection-message {
+  margin-top: 10px;
+  padding: 9px;
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.sus-main-score {
+  margin-top: 10px;
+  padding: 13px;
+  border-radius: 8px;
+  background: #0f172a;
+  color: white;
+}
+
+.sus-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: #94a3b8;
+}
+
+#sus-score {
+  margin-top: 4px;
+  font-size: 29px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+#sus-percentile {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.sus-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.sus-compare > div {
+  padding: 9px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+.sus-compare span {
+  display: block;
+  color: #64748b;
+  font-size: 9px;
+  margin-bottom: 4px;
+}
+
+.sus-compare strong {
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.sus-location {
+  margin-top: 8px;
+  font-size: 10px;
+  color: #64748b;
+}
+
+.sus-note {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.sus-gradient {
+  height: 13px;
+  width: 220px;
+  max-width: 100%;
+  border-radius: 5px;
+  background: linear-gradient(
+    90deg,
+    #00693e 0%,
+    #419b4b 20%,
+    #96cd5a 40%,
+    #f5dc5f 60%,
+    #f59b41 75%,
+    #e14b37 88%,
+    #af1e23 96%,
+    #5f0a19 100%
+  );
+}
+
+.sus-gradient-labels {
+  width: 220px;
+  max-width: 100%;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 9px;
+  color: #64748b;
+}

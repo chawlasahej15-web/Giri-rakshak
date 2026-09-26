@@ -14,6 +14,7 @@ from routes.official import router as official_router
 from routes.reports import router as reports_router
 from routes.risk import router as risk_router
 from routes.sensors import router as sensors_router
+from routes.susceptibility import router as susceptibility_router
 
 app = FastAPI(
     title="GiriRakshak API",
@@ -50,6 +51,7 @@ app.include_router(reports_router)
 app.include_router(official_router)
 app.include_router(notifications_router)
 app.include_router(sensors_router)
+app.include_router(susceptibility_router)
 app.include_router(risk_router)
 app.include_router(alerts_router)
 

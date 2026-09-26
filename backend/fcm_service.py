@@ -11,29 +11,30 @@ SERVICE_ACCOUNT_FILE = BASE_DIR / "firebase-service-account.json"
 
 def initialize_firebase():
     if firebase_admin._apps:
-        return
+        return True
 
-    # Render: read service account JSON from environment variable
     service_account_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
 
-    if service_account_json:
-        service_account_info = json.loads(service_account_json)
-        cred = credentials.Certificate(service_account_info)
+    try:
+        if service_account_json:
+            service_account_info = json.loads(service_account_json)
+            cred = credentials.Certificate(service_account_info)
+            firebase_admin.initialize_app(cred)
+            print("Firebase initialized from environment.")
+            return True
 
-    # Local development: use the local JSON file
-    elif SERVICE_ACCOUNT_FILE.exists():
-        cred = credentials.Certificate(str(SERVICE_ACCOUNT_FILE))
+        if SERVICE_ACCOUNT_FILE.exists():
+            cred = credentials.Certificate(str(SERVICE_ACCOUNT_FILE))
+            firebase_admin.initialize_app(cred)
+            print("Firebase initialized from local service-account file.")
+            return True
 
-    else:
-        raise FileNotFoundError(
-            "Firebase credentials missing. Set FIREBASE_SERVICE_ACCOUNT_JSON "
-            "on Render or provide firebase-service-account.json locally."
-        )
+        print("Firebase credentials not configured. Push notifications disabled.")
+        return False
 
-    firebase_admin.initialize_app(cred)
-
-
-initialize_firebase()
+    except Exception as exc:
+        print("Firebase initialization failed:", repr(exc))
+        return False
 
 
 def send_push_notification(
@@ -42,6 +43,13 @@ def send_push_notification(
     body: str,
     data: dict | None = None,
 ):
+    if not initialize_firebase():
+        return {
+            "success": False,
+            "message_id": None,
+            "error": "Firebase is not configured.",
+        }
+
     message = messaging.Message(
         notification=messaging.Notification(
             title=title,

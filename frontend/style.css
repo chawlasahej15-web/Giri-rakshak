@@ -1110,3 +1110,58 @@ body.dark-mode .logo-group {
   font-size: 9px;
   color: #64748b;
 }
+
+/* =========================================================
+   STRICT CITIZEN ISOLATION: FORCE HIDE SUSCEPTIBILITY UI
+   ========================================================= */
+
+/* 1. Hide Susceptibility Buttons & Toggles */
+body.role-citizen .sus-toggle,
+body.role-citizen .sus-btn,
+body.role-citizen [data-mode="susceptibility"],
+body.role-citizen #btn-mode-susceptibility,
+body.role-citizen .map-mode-toggle,
+body.role-citizen .mode-btn-group {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+/* 2. Hide Susceptibility Model Selection & Text Info */
+body.role-citizen .sus-help,
+body.role-citizen .sus-subtitle,
+body.role-citizen .susceptibility-model-box,
+body.role-citizen #susceptibility-model-controls {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* 3. Hide Static Susceptibility Bottom Gradient Legend */
+body.role-citizen .sus-gradient,
+body.role-citizen .sus-gradient-labels,
+body.role-citizen .susceptibility-legend,
+body.role-citizen .static-susceptibility-card {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* 4. Hide Static Susceptibility Right Sidebar Panel Cards & Score Boxes */
+body.role-citizen .sus-selection-message,
+body.role-citizen .sus-main-score,
+body.role-citizen .sus-compare,
+body.role-citizen .sus-location,
+body.role-citizen .sus-note,
+body.role-citizen #susceptibility-sidebar-panel,
+body.role-citizen .static-susceptibility-panel {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Hide System Status Pill for Citizens */
+body.role-citizen .system-status-pill {
+  display: none !important;
+}

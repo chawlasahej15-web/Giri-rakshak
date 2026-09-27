@@ -1,7 +1,6 @@
 // =========================================================================
 // GiriRakshak SIH Early Warning System Engine
 // Complete Live Regional Open-Meteo Ingestion + Dynamic AI Heatmap Engine
-// Real-time ESP32 Pipeline + Overpass Highway Network 1 km Avoidance Corridors
 // =========================================================================
 
 // Request push permission when dashboard loads
@@ -53,13 +52,12 @@ const nerData = {
     districts: {
       aizawl: {
         name: "Aizawl",
-        isHardwareNode: true,
         center: [23.7307, 92.7173],
         zoom: 13,
         riskLevel: "extreme",
         riskScore: 94.2,
         alertTitle: "EXTREME CRITICAL: Laipuitlang & Ramhlun Urban Cuts",
-        alertText: "Continuous physical telemetry confirms accelerating slope creep (18.2° tilt) following heavy saturation. Immediate structural danger.",
+        alertText: "Continuous telemetry confirms accelerating slope creep (18.2° tilt) following heavy saturation. Immediate structural danger.",
         telemetry: { tilt: 18.2, moisture: 89, rain: 114 },
         zones: [
           {
@@ -80,7 +78,6 @@ const nerData = {
       },
       lunglei: {
         name: "Lunglei",
-        isHardwareNode: false,
         center: [22.8878, 92.7417],
         zoom: 13,
         riskLevel: "high",
@@ -117,7 +114,6 @@ const nerData = {
     districts: {
       dimapur: {
         name: "Dimapur (Paglapahar)",
-        isHardwareNode: false,
         center: [25.9042, 93.7279],
         zoom: 13,
         riskLevel: "extreme",
@@ -142,7 +138,6 @@ const nerData = {
 
       kohima: {
         name: "Kohima",
-        isHardwareNode: false,
         center: [25.6751, 94.1086],
         zoom: 13,
         riskLevel: "very-high",
@@ -178,7 +173,6 @@ const nerData = {
     districts: {
       gangtok: {
         name: "Gangtok",
-        isHardwareNode: false,
         center: [27.3389, 88.6065],
         zoom: 13,
         riskLevel: "extreme",
@@ -214,7 +208,6 @@ const nerData = {
     districts: {
       dima_hasao: {
         name: "Dima Hasao (Haflong)",
-        isHardwareNode: false,
         center: [25.1706, 93.0238],
         zoom: 13,
         riskLevel: "extreme",
@@ -250,7 +243,6 @@ const nerData = {
     districts: {
       east_khasi_hills: {
         name: "East Khasi Hills (Sohra)",
-        isHardwareNode: false,
         center: [25.2986, 91.7180],
         zoom: 13,
         riskLevel: "extreme",
@@ -286,7 +278,6 @@ const nerData = {
     districts: {
       noney: {
         name: "Noney (Tupul)",
-        isHardwareNode: false,
         center: [24.7937, 93.5828],
         zoom: 13,
         riskLevel: "extreme",
@@ -322,7 +313,6 @@ const nerData = {
     districts: {
       tawang: {
         name: "Tawang",
-        isHardwareNode: false,
         center: [27.5861, 91.8594],
         zoom: 13,
         riskLevel: "high",
@@ -358,7 +348,6 @@ const nerData = {
     districts: {
       dhalai: {
         name: "Dhalai (Atharamura)",
-        isHardwareNode: false,
         center: [23.8520, 91.8533],
         zoom: 13,
         riskLevel: "high",
@@ -476,7 +465,7 @@ function initChart() {
 }
 
 // =========================================================================
-// 6. Real-Time Open-Meteo Weather API Integration (All 8 NER States)
+// 6. Real-Time Open-Meteo Weather API Integration
 // =========================================================================
 
 async function fetchLiveWeatherForDistrict(lat, lng) {
@@ -511,7 +500,6 @@ async function syncAllRegionalLiveFeeds() {
     const state = nerData[sKey];
     for (const dKey of Object.keys(state.districts)) {
       const dist = state.districts[dKey];
-      if (dist.isHardwareNode) continue;
 
       const live = await fetchLiveWeatherForDistrict(dist.center[0], dist.center[1]);
       if (live) {
@@ -563,10 +551,6 @@ async function loadBackendRiskZones() {
   }
 }
 
-// =====================================================
-// LIVE ESP32 TELEMETRY (FastAPI Sensor Data Pipeline)
-// =====================================================
-
 async function loadLatestSensorTelemetryForZone(zoneId) {
   try {
     const response = await fetch(
@@ -591,7 +575,7 @@ async function loadLatestSensorTelemetryForZone(zoneId) {
     const rainEl = document.getElementById('val-rain');
 
     if (titleEl) titleEl.innerText = `${zoneId} — Sensor Telemetry`;
-    if (descEl) descEl.innerText = `Data Source: Sensor Simulation / ESP32 Pipeline • Updated ${formatSensorTime(reading.timestamp)}`;
+    if (descEl) descEl.innerText = `Data Source: Sensor Telemetry Pipeline • Updated ${formatSensorTime(reading.timestamp)}`;
     if (badgeEl) {
       badgeEl.className = 'badge blue';
       badgeEl.innerText = 'SENSOR DATA';
@@ -618,62 +602,9 @@ function formatSensorTime(timestamp) {
   return Number.isNaN(date.getTime()) ? timestamp : date.toLocaleString();
 }
 
-async function loadLatestSensorTelemetry() {
-  if (telemetryViewMode !== 'hardware') return null;
-  return loadLatestSensorTelemetryBySensorId('ESP32_01');
-}
-
-async function loadLatestSensorTelemetryBySensorId(sensorId) {
-  try {
-    const response = await fetch(
-      `${getApiBase()}/api/sensor-data/latest/${encodeURIComponent(sensorId)}`,
-      { cache: 'no-store' }
-    );
-    if (!response.ok) throw new Error(`API returned ${response.status}`);
-    const data = await response.json();
-    if (data.status !== 'ok' || !data.reading) return null;
-
-    const reading = data.reading;
-    latestSensorReading = reading;
-    const tilt = Number(reading.tilt_deg);
-    const moisture = Number(reading.moisture_pct);
-
-    const titleEl = document.getElementById('telemetry-card-title');
-    const descEl = document.getElementById('telemetry-source-desc');
-    const badgeEl = document.getElementById('hardware-badge');
-    const tiltEl = document.getElementById('val-tilt');
-    const moistEl = document.getElementById('val-moisture');
-    const rainEl = document.getElementById('val-rain');
-
-    if (titleEl) titleEl.innerText = `${sensorId} — ESP32 Edge Telemetry`;
-    if (descEl) descEl.innerText = `Data Source: Physical ESP32 Sensor • Updated ${formatSensorTime(reading.timestamp)}`;
-    if (badgeEl) {
-      badgeEl.className = 'badge purple';
-      badgeEl.innerText = 'LIVE HARDWARE';
-    }
-    if (tiltEl) tiltEl.innerText = Number.isFinite(tilt) ? `${tilt.toFixed(1)}°` : '—';
-    if (moistEl) moistEl.innerText = Number.isFinite(moisture) ? `${moisture.toFixed(1)}%` : '—';
-    if (rainEl) rainEl.innerText = '—';
-
-    if (telemetryChart && telemetryChart.data && telemetryChart.data.datasets.length >= 2) {
-      telemetryChart.data.datasets[0].data = [tilt, tilt, tilt, tilt, tilt, tilt];
-      telemetryChart.data.datasets[1].data = [moisture, moisture, moisture, moisture, moisture, moisture];
-      telemetryChart.update('none');
-    }
-
-    return reading;
-  } catch (error) {
-    return null;
-  }
-}
-
 async function refreshTelemetry() {
   if (telemetryViewMode === 'ml-zone' && selectedBackendZoneId) {
     await loadLatestSensorTelemetryForZone(selectedBackendZoneId);
-    return;
-  }
-  if (telemetryViewMode === 'hardware') {
-    await loadLatestSensorTelemetry();
   }
 }
 
@@ -714,7 +645,7 @@ function renderBackendRiskZones(zones) {
 }
 
 // =========================================================================
-// 7. Dynamic AI Hazard Heatmap (Auto-Mounting Engine)
+// 7. Dynamic AI Hazard Heatmap
 // =========================================================================
 
 const simulatedAIPredictions = [
@@ -746,10 +677,7 @@ function renderDendriticRidgeHeatmap(points = simulatedAIPredictions, autoFocus 
   }
 
   if (typeof L.heatLayer !== 'function') {
-    const s = document.createElement('script');
-    s.src = 'https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js';
-    s.onload = () => renderDendriticRidgeHeatmap(points, autoFocus);
-    document.head.appendChild(s);
+    console.warn("Leaflet.heat library not loaded.");
     return;
   }
 
@@ -784,7 +712,7 @@ function renderDendriticRidgeHeatmap(points = simulatedAIPredictions, autoFocus 
 }
 
 // =========================================================================
-// 8. Master Render: Boundaries, Polygons, Stations & Saved Reports
+// 8. Master Render
 // =========================================================================
 
 function renderAllNEROverview() {
@@ -808,7 +736,9 @@ function renderAllNEROverview() {
         stateSelect.value = stateKey;
         populateDistricts(stateKey);
         map.flyTo(state.center, state.zoom);
-        if (stateKey === 'mizoram') {
+        
+        // Only render heatmap for officials
+        if (stateKey === 'mizoram' && role === 'official') {
           renderDendriticRidgeHeatmap(simulatedAIPredictions, true);
         }
       });
@@ -817,27 +747,17 @@ function renderAllNEROverview() {
     }
   });
 
-  // ONLY show ESP32 Physical Station pin for Official Logins
+  // STRICT GUARD: Render heatmap ONLY if official
   if (role === 'official') {
-    const aizawlDist = nerData.mizoram.districts.aizawl;
-    const espIcon = L.divIcon({
-      html: `<div style="background: #7c3aed; border: 2.5px solid white; width: 16px; height: 16px; border-radius: 50%; box-shadow: 0 0 10px rgba(124, 58, 237, 0.85); cursor: pointer;"></div>`,
-      iconSize: [16, 16]
-    });
-
-    const singleEspMarker = L.marker(aizawlDist.sensorCoords, { icon: espIcon });
-    singleEspMarker.bindTooltip("<b>MONITORING STATION</b><br/>Aizawl Field Telemetry Node", { permanent: false });
-    singleEspMarker.on('click', () => {
-      stateSelect.value = 'mizoram';
-      populateDistricts('mizoram');
-      districtSelect.value = 'aizawl';
-      updateDistrictView('mizoram', 'aizawl');
-    });
-
-    hardwareMarkerGroup.addLayer(singleEspMarker);
+    renderDendriticRidgeHeatmap(simulatedAIPredictions, false);
+  } else {
+    // Clear heatmap if citizen
+    if (heatLayerInstance) {
+      map.removeLayer(heatLayerInstance);
+      heatLayerInstance = null;
+    }
   }
 
-  renderDendriticRidgeHeatmap(simulatedAIPredictions, false);
   loadSavedCitizenReports();
   resetOverviewSidebar();
   updateRoutesToAvoidView();
@@ -869,10 +789,10 @@ function resetOverviewSidebar() {
     riskBadge.innerText = 'OVERVIEW';
   }
   if (distTitle) distTitle.innerText = "North Eastern Region (NER)";
-  if (distBody) distBody.innerText = "Surveillance active across 8 NER states. Select Aizawl to inspect the deployed physical ESP32 edge telemetry.";
+  if (distBody) distBody.innerText = "Surveillance active across 8 NER states.";
   if (alertBox) alertBox.style.borderLeftColor = '#0284c7';
-  if (cardTitle) cardTitle.innerText = "IoT Edge Telemetry";
-  if (sourceDesc) sourceDesc.innerText = "Data Source: Regional Meteorological Model";
+  if (cardTitle) cardTitle.innerText = "Regional Telemetry";
+  if (sourceDesc) sourceDesc.innerText = "Data Source: Meteorological & GIS Risk Models";
   if (hwBadge) {
     hwBadge.className = 'badge gray';
     hwBadge.innerText = 'MODEL DATA';
@@ -944,77 +864,52 @@ async function updateDistrictView(stateKey, distKey) {
     renderDendriticRidgeHeatmap(simulatedAIPredictions, true);
   }
 
-  const isHardware = !!dist.isHardwareNode;
-  telemetryViewMode = isHardware ? 'hardware' : 'model';
+  telemetryViewMode = 'model';
 
   const sourceTag = document.getElementById('data-source-tag');
   const hwBadge = document.getElementById('hardware-badge');
   const cardTitle = document.getElementById('telemetry-card-title');
   const sourceDesc = document.getElementById('telemetry-source-desc');
 
-  if (isHardware) {
-    if (sourceTag) {
-      sourceTag.innerText = "LIVE ESP32 DEPLOYMENT";
-      sourceTag.classList.add('hardware');
-    }
-    if (cardTitle) cardTitle.innerText = "Aizawl — ESP32 Edge Station";
-    if (sourceDesc) sourceDesc.innerText = "Waiting for physical ESP32 telemetry...";
-    if (hwBadge) {
-      hwBadge.className = 'badge purple';
-      hwBadge.innerText = 'LIVE HARDWARE';
-    }
-  } else {
-    if (sourceTag) {
-      sourceTag.innerText = "LIVE OPEN-METEO & GIS MODEL";
-      sourceTag.classList.remove('hardware');
-    }
-    if (cardTitle) cardTitle.innerText = `${dist.name} — Live Feeds`;
-    if (sourceDesc) sourceDesc.innerText = "Data Source: Live IMD/Open-Meteo Satellite Precipitation";
-    if (hwBadge) {
-      hwBadge.className = 'badge gray';
-      hwBadge.innerText = 'LIVE MODEL';
-    }
+  if (sourceTag) {
+    sourceTag.innerText = "LIVE OPEN-METEO & GIS MODEL";
+    sourceTag.classList.remove('hardware');
+  }
+  if (cardTitle) cardTitle.innerText = `${dist.name} — Live Feeds`;
+  if (sourceDesc) sourceDesc.innerText = "Data Source: Live IMD/Open-Meteo Satellite Precipitation";
+  if (hwBadge) {
+    hwBadge.className = 'badge gray';
+    hwBadge.innerText = 'LIVE MODEL';
   }
 
   const elTilt = document.getElementById('val-tilt');
   const elMoist = document.getElementById('val-moisture');
   const elRain = document.getElementById('val-rain');
 
-  if (isHardware) {
-    if (elTilt) elTilt.innerText = '—';
-    if (elMoist) elMoist.innerText = '—';
-    if (elRain) elRain.innerText = '—';
-  } else {
-    if (elTilt) elTilt.innerText = `${dist.telemetry.tilt}°`;
-    if (elMoist) elMoist.innerText = `${dist.telemetry.moisture}%`;
-    if (elRain) elRain.innerText = `${dist.telemetry.rain} mm`;
-  }
+  if (elTilt) elTilt.innerText = `${dist.telemetry.tilt}°`;
+  if (elMoist) elMoist.innerText = `${dist.telemetry.moisture}%`;
+  if (elRain) elRain.innerText = `${dist.telemetry.rain} mm`;
 
   if (telemetryChart) {
-    if (isHardware) {
-      telemetryChart.data.datasets[0].data = [null, null, null, null, null, null];
-      telemetryChart.data.datasets[1].data = [null, null, null, null, null, null];
-    } else {
-      const baseTilt = dist.telemetry.tilt;
-      const baseM = dist.telemetry.moisture;
-      telemetryChart.data.datasets[0].data = [
-        Math.max(0, baseTilt - 1.2),
-        Math.max(0, baseTilt - 1.0),
-        Math.max(0, baseTilt - 0.7),
-        Math.max(0, baseTilt - 0.4),
-        Math.max(0, baseTilt - 0.2),
-        baseTilt
-      ];
+    const baseTilt = dist.telemetry.tilt;
+    const baseM = dist.telemetry.moisture;
+    telemetryChart.data.datasets[0].data = [
+      Math.max(0, baseTilt - 1.2),
+      Math.max(0, baseTilt - 1.0),
+      Math.max(0, baseTilt - 0.7),
+      Math.max(0, baseTilt - 0.4),
+      Math.max(0, baseTilt - 0.2),
+      baseTilt
+    ];
 
-      telemetryChart.data.datasets[1].data = [
-        baseM - 5,
-        baseM - 4,
-        baseM - 3,
-        baseM - 2,
-        baseM - 1,
-        baseM
-      ];
-    }
+    telemetryChart.data.datasets[1].data = [
+      baseM - 5,
+      baseM - 4,
+      baseM - 3,
+      baseM - 2,
+      baseM - 1,
+      baseM
+    ];
     telemetryChart.update();
   }
 
@@ -1036,10 +931,6 @@ async function updateDistrictView(stateKey, distKey) {
 
   if (dist.zones && dist.zones.length > 0) {
     updateShapPanel(dist.zones[0], dist.name);
-  }
-
-  if (isHardware) {
-    loadLatestSensorTelemetry();
   }
 }
 
@@ -1110,20 +1001,12 @@ function populateDistricts(selectedState) {
     return;
   }
 
-  const role = sessionStorage.getItem('userRole');
   const dists = nerData[selectedState].districts;
 
   Object.keys(dists).forEach(distKey => {
     const opt = document.createElement('option');
     opt.value = distKey;
-    
-    // Clean district names for citizens; include technical tags for officials
-    if (role === 'official') {
-      opt.innerText = dists[distKey].name + (dists[distKey].isHardwareNode ? " [IoT Station]" : " (Weather Model)");
-    } else {
-      opt.innerText = dists[distKey].name;
-    }
-
+    opt.innerText = dists[distKey].name;
     districtSelect.appendChild(opt);
   });
 
@@ -1184,7 +1067,7 @@ if (btnResetView) {
   });
 }
 
-// 12. Alert Preview & Dispatch Trigger (SMS API Route)
+// 12. Alert Preview & Dispatch Trigger
 const langSelect = document.getElementById('lang-select');
 if (langSelect) {
   langSelect.addEventListener('change', e => {
@@ -1204,7 +1087,7 @@ if (btnTriggerAlert) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          zone_id: 'ESP32_01',
+          zone_id: 'NER_ZONE_01',
           risk_level: 'critical',
           message: translations[lang]
         })
@@ -1224,11 +1107,10 @@ if (btnTriggerAlert) {
 }
 
 // =========================================================================
-// 13. High-Precision Named Road Resolution Engine (Overpass API + Fallback)
+// 13. High-Precision Named Road Resolution Engine
 // =========================================================================
 
 async function getAreaNameFromCoords(lat, lng) {
-  // 1. Primary: Overpass API with strict 3-second client abort
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000);
@@ -1255,38 +1137,8 @@ async function getAreaNameFromCoords(lat, lng) {
         }
       }
     }
-  } catch (err) {
-    // Graceful silent fallback without blocking UI thread
-  }
+  } catch (err) {}
 
-  // 2. Secondary: Nominatim Reverse Geocoding with 2.5-second client abort
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
-
-    const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`;
-    const res = await fetch(nominatimUrl, {
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-
-    if (res.ok) {
-      const data = await res.json();
-      const addr = data.address || {};
-      const road = addr.road || addr.highway || addr.pedestrian || addr.street;
-      const suburb = addr.suburb || addr.neighbourhood || addr.village || addr.city_district || addr.town;
-
-      if (road && suburb) return `${road}, ${suburb}`;
-      if (road) return road;
-      if (suburb) return `${suburb} Corridor`;
-      if (data.name) return data.name;
-    }
-  } catch (e) {
-    // Fall through to regional coordinates table
-  }
-
-  // 3. Instant Fallback: Geotechnical corridor boundary table
   const latNum = Number(lat);
   const lngNum = Number(lng);
 
@@ -1294,14 +1146,12 @@ async function getAreaNameFromCoords(lat, lng) {
   if (latNum >= 25.8 && latNum <= 26.0 && lngNum >= 93.6 && lngNum <= 93.9) return "NH-29 (Dimapur-Kohima Gorge Corridor)";
   if (latNum >= 25.6 && latNum <= 25.75 && lngNum >= 94.05 && lngNum <= 94.2) return "NH-02 / Kohima Bypass Link";
   if (latNum >= 27.25 && latNum <= 27.45 && lngNum >= 88.55 && lngNum <= 88.65) return "NH-10 / Gangtok-Siliguri Highway";
-  if (latNum >= 25.1 && latNum <= 25.25 && lngNum >= 92.95 && lngNum <= 93.15) return "Haflong Hill Section Arterial Link";
-  if (latNum >= 25.2 && latNum <= 25.4 && lngNum >= 91.65 && lngNum <= 91.8) return "SH-5 / Sohra-Shella Escarpment Highway";
 
   return "Regional Arterial Corridor";
 }
 
 // =========================================================================
-// 14. Citizen Field Incident & Routes to Avoid Sync Engine (Universal Delete)
+// 14. Citizen Field Incident Sync Engine
 // =========================================================================
 
 function renderCitizenMarker(lat, lng, type, desc, image, shouldFly, id, reporter, locationName) {
@@ -1348,21 +1198,18 @@ function renderCitizenMarker(lat, lng, type, desc, image, shouldFly, id, reporte
 window.deleteCitizenReport = async function(reportId) {
   if (!confirm('Are you sure you want to remove this citizen incident report?')) return;
 
-  // 1. Delete from Render backend if present
   try {
     await fetch(`${getApiBase()}/api/reports/${encodeURIComponent(reportId)}`, {
       method: 'DELETE'
     });
   } catch (err) {
-    console.warn('[Citizen Sync] Cloud deletion error (proceeding to local removal):', err);
+    console.warn('[Citizen Sync] Cloud deletion error:', err);
   }
 
-  // 2. Delete from browser cache
   let reports = JSON.parse(localStorage.getItem('giri_citizen_reports') || '[]');
   reports = reports.filter(r => String(r.id) !== String(reportId) && String(r.lat) !== String(reportId));
   localStorage.setItem('giri_citizen_reports', JSON.stringify(reports));
 
-  // 3. Immediately update UI
   await loadSavedCitizenReports();
 };
 
@@ -1380,7 +1227,6 @@ async function loadSavedCitizenReports() {
 
     let storedReports = [];
 
-    // 1. Fetch real-time reports from Render backend
     try {
       const response = await fetch(`${getApiBase()}/api/citizen-reports`, { 
         cache: 'no-store' 
@@ -1403,10 +1249,9 @@ async function loadSavedCitizenReports() {
         }
       }
     } catch (apiErr) {
-      console.warn('[Citizen Sync] Render fetch failed, using local storage fallback:', apiErr);
+      console.warn('[Citizen Sync] Render fetch failed, fallback to local storage:', apiErr);
     }
 
-    // 2. Fallback to localStorage if offline or network fails
     if (storedReports.length === 0) {
       storedReports = JSON.parse(localStorage.getItem('giri_citizen_reports') || '[]');
     }
@@ -1455,7 +1300,6 @@ function renderCitizenReportsSidebarList() {
   const citizenCount = document.getElementById('citizen-report-count');
   const officialList = document.getElementById('official-reports-list');
 
-  // 1. Citizen Role View
   if (role === 'citizen') {
     if (citizenCard) citizenCard.style.display = 'block';
     if (citizenCount) citizenCount.innerText = `${reports.length} PINS`;
@@ -1484,7 +1328,6 @@ function renderCitizenReportsSidebarList() {
     if (citizenCard) citizenCard.style.display = 'none';
   }
 
-  // 2. Official Role View
   if (role === 'official' && officialList) {
     if (reports.length === 0) {
       officialList.innerHTML = '<p style="color: #94a3b8; font-size: 12px; margin: 0;">No citizen field pins active on map.</p>';
@@ -1511,7 +1354,6 @@ function renderCitizenReportsSidebarList() {
   }
 }
 
-// 1 KM HAZARD BUFFER & AVOID ROUTES SYSTEM
 async function updateRoutesToAvoidView() {
   if (typeof avoidZonesGroup === 'undefined' || !avoidZonesGroup) return;
   avoidZonesGroup.clearLayers();
@@ -1659,11 +1501,9 @@ function buildLocationIndex() {
 
     Object.entries(state.districts).forEach(([dKey, dist]) => {
       index.push({
-        type: dist.isHardwareNode ? 'hardware' : 'district',
+        type: 'district',
         name: dist.name,
-        subText: dist.isHardwareNode
-          ? `Physical ESP32 Station, ${state.name}`
-          : `Live Weather Model, ${state.name}`,
+        subText: `Live Weather Model, ${state.name}`,
         center: dist.center,
         zoom: dist.zoom,
         stateKey: sKey,
@@ -1767,7 +1607,6 @@ function handleLocationSelect(loc) {
     }
   } else if (
     loc.type === 'district' ||
-    loc.type === 'hardware' ||
     loc.type === 'zone'
   ) {
     if (stateSelect) stateSelect.value = loc.stateKey;
@@ -1802,211 +1641,8 @@ document.addEventListener('click', e => {
 
 map.on('click dragstart', closeSearchSuggestions);
 
-// ============================================================
-// LIVE SENSOR ALERT MONITOR (ESP32 Live Stream)
-// ============================================================
-
-let latestSeenAlertId = 0;
-let liveAlertPollTimer = null;
-let liveAlertMonitorInitialized = false;
-
-function ensureLiveSensorAlertUI() {
-  if (document.getElementById('live-sensor-alert')) return;
-
-  const styleId = 'live-sensor-alert-runtime-style';
-  if (!document.getElementById(styleId)) {
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.textContent = `
-      .live-sensor-alert {
-        position: fixed;
-        top: 82px;
-        right: 24px;
-        width: min(390px, calc(100vw - 32px));
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
-        padding: 16px 18px;
-        background: #ffffff;
-        border: 2px solid #dc2626;
-        border-left: 6px solid #dc2626;
-        border-radius: 12px;
-        box-shadow: 0 12px 30px rgba(0, 0, 0, .18), 0 0 0 4px rgba(220, 38, 38, .08);
-        z-index: 99999;
-        animation: liveAlertIn .28s ease-out;
-      }
-      .live-sensor-alert.hidden { display: none; }
-      .live-alert-icon { font-size: 27px; line-height: 1; margin-top: 2px; }
-      .live-alert-content { flex: 1; min-width: 0; }
-      .live-alert-title { font-size: .72rem; font-weight: 800; letter-spacing: .08em; color: #b91c1c; margin-bottom: 4px; }
-      .live-alert-zone { font-size: 1rem; font-weight: 800; color: #111827; margin-bottom: 4px; }
-      .live-alert-message { font-size: .85rem; line-height: 1.4; color: #374151; }
-      .live-alert-reading { margin-top: 8px; font-size: .78rem; font-weight: 700; color: #991b1b; }
-      .live-alert-time { margin-top: 7px; font-size: .72rem; color: #6b7280; }
-      .live-alert-close { border: 0; background: transparent; color: #6b7280; font-size: 24px; line-height: 1; cursor: pointer; padding: 0 2px; }
-      .live-alert-close:hover { color: #111827; }
-      @keyframes liveAlertIn {
-        from { opacity: 0; transform: translateY(-12px) translateX(12px); }
-        to { opacity: 1; transform: translateY(0) translateX(0); }
-      }
-      @media (max-width: 700px) {
-        .live-sensor-alert { top: 70px; right: 12px; width: calc(100vw - 24px); }
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  const alertBox = document.createElement('div');
-  alertBox.id = 'live-sensor-alert';
-  alertBox.className = 'live-sensor-alert hidden';
-  alertBox.innerHTML = `
-    <div class="live-alert-icon">⚠️</div>
-    <div class="live-alert-content">
-      <div class="live-alert-title">LIVE SENSOR ALERT</div>
-      <div id="live-alert-zone" class="live-alert-zone">ESP32 Edge Node</div>
-      <div id="live-alert-message" class="live-alert-message">Reactive safety threshold exceeded.</div>
-      <div id="live-alert-reading" class="live-alert-reading"></div>
-      <div id="live-alert-time" class="live-alert-time">Detected just now</div>
-    </div>
-    <button id="live-alert-close" class="live-alert-close" aria-label="Close alert">×</button>
-  `;
-
-  document.body.appendChild(alertBox);
-  document.getElementById('live-alert-close').addEventListener('click', hideLiveSensorAlert);
-}
-
-function showLiveSensorAlert(alert, reading = null) {
-  ensureLiveSensorAlertUI();
-
-  const alertBox = document.getElementById('live-sensor-alert');
-  const zoneEl = document.getElementById('live-alert-zone');
-  const messageEl = document.getElementById('live-alert-message');
-  const readingEl = document.getElementById('live-alert-reading');
-  const timeEl = document.getElementById('live-alert-time');
-
-  if (!alertBox || !zoneEl || !messageEl || !readingEl || !timeEl) return;
-
-  const zoneId = alert.zone_id || alert.sensor_id || 'ESP32 Edge Node';
-  zoneEl.innerText = `${zoneId} — Reactive Safety Alert`;
-  messageEl.innerText = alert.message || 'Reactive safety threshold exceeded.';
-
-  if (reading) {
-    const tilt = Number(reading.tilt_deg);
-    const moisture = Number(reading.moisture_pct);
-    const parts = [];
-
-    if (Number.isFinite(tilt)) parts.push(`Tilt ${tilt.toFixed(1)}°`);
-    if (Number.isFinite(moisture)) parts.push(`Moisture ${moisture.toFixed(1)}%`);
-
-    readingEl.innerText = parts.length ? parts.join('  •  ') : '';
-    latestSensorReading = reading;
-
-    if (zoneId === 'ESP32_01') {
-      telemetryViewMode = 'hardware';
-      selectedBackendZoneId = null;
-
-      const sourceTag = document.getElementById('data-source-tag');
-      const cardTitle = document.getElementById('telemetry-card-title');
-      const sourceDesc = document.getElementById('telemetry-source-desc');
-      const hwBadge = document.getElementById('hardware-badge');
-      const elTilt = document.getElementById('val-tilt');
-      const elMoist = document.getElementById('val-moisture');
-      const elRain = document.getElementById('val-rain');
-
-      if (sourceTag) {
-        sourceTag.innerText = 'LIVE ESP32 DEPLOYMENT';
-        sourceTag.classList.add('hardware');
-      }
-      if (cardTitle) cardTitle.innerText = 'ESP32_01 — ESP32 Edge Telemetry';
-      if (sourceDesc) sourceDesc.innerText = `Data Source: Physical ESP32 Sensor • Updated ${formatSensorTime(reading.timestamp)}`;
-      if (hwBadge) {
-        hwBadge.className = 'badge purple';
-        hwBadge.innerText = 'LIVE HARDWARE';
-      }
-      if (elTilt) elTilt.innerText = Number.isFinite(tilt) ? `${tilt.toFixed(1)}°` : '—';
-      if (elMoist) elMoist.innerText = Number.isFinite(moisture) ? `${moisture.toFixed(1)}%` : '—';
-      if (elRain) elRain.innerText = '—';
-    }
-  } else {
-    readingEl.innerText = '';
-  }
-
-  timeEl.innerText = alert.timestamp ? `Detected: ${formatSensorTime(alert.timestamp)}` : 'Detected just now';
-  alertBox.classList.remove('hidden');
-}
-
-function hideLiveSensorAlert() {
-  const alertBox = document.getElementById('live-sensor-alert');
-  if (alertBox) alertBox.classList.add('hidden');
-}
-
-async function fetchRecentAlerts() {
-  const response = await fetch(`${getApiBase()}/api/alerts/recent`, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`Alerts API returned ${response.status}`);
-  const alerts = await response.json();
-  return Array.isArray(alerts) ? alerts : [];
-}
-
-function isReactiveSensorAlert(alert) {
-  const message = String(alert?.message || '');
-  const level = String(alert?.risk_level || '').toLowerCase();
-  const zoneId = String(alert?.zone_id || '');
-  const isHardwareAlert = /abnormal sensor threshold detected/i.test(message) || /reactive alert/i.test(message);
-  return zoneId === 'ESP32_01' && level === 'critical' && isHardwareAlert;
-}
-
-async function pollLiveSensorAlerts() {
-  try {
-    const alerts = await fetchRecentAlerts();
-    const sensorAlerts = alerts.filter(isReactiveSensorAlert);
-
-    if (sensorAlerts.length === 0) {
-      liveAlertMonitorInitialized = true;
-      return;
-    }
-
-    const latestAlert = sensorAlerts[0];
-    const alertId = Number(latestAlert.alert_id || 0);
-
-    if (!liveAlertMonitorInitialized) {
-      latestSeenAlertId = alertId;
-      liveAlertMonitorInitialized = true;
-      return;
-    }
-
-    if (alertId > 0 && alertId <= latestSeenAlertId) return;
-    if (alertId > 0) latestSeenAlertId = alertId;
-
-    let reading = null;
-    const zoneId = latestAlert.zone_id;
-
-    if (zoneId) {
-      try {
-        const sensorResponse = await fetch(
-          `${getApiBase()}/api/sensor-data/latest/${encodeURIComponent(zoneId)}`,
-          { cache: 'no-store' }
-        );
-        if (sensorResponse.ok) {
-          const sensorData = await sensorResponse.json();
-          if (sensorData.status === 'ok' && sensorData.reading) {
-            reading = sensorData.reading;
-          }
-        }
-      } catch (sensorError) {}
-    }
-
-    showLiveSensorAlert(latestAlert, reading);
-  } catch (error) {}
-}
-
-function startLiveSensorAlertMonitoring() {
-  ensureLiveSensorAlertUI();
-  pollLiveSensorAlerts();
-  liveAlertPollTimer = setInterval(pollLiveSensorAlerts, 3000);
-}
-
 // =========================================================================
-// 16. Operational Alerts Manager (Cloud Synchronized)
+// 16. Operational Alerts Manager
 // =========================================================================
 
 async function dispatchAlert() {
@@ -2023,7 +1659,6 @@ async function dispatchAlert() {
     return;
   }
 
-  // 1. Post advisory to Render cloud database
   try {
     await fetch(`${getApiBase()}/api/alerts`, {
       method: 'POST',
@@ -2041,7 +1676,6 @@ async function dispatchAlert() {
     console.warn('[Alerts] Cloud dispatch offline, using local queue:', err);
   }
 
-  // 2. Add to localStorage for instant local responsiveness
   const newAlert = {
     id: 'alert_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
     title: title,
@@ -2054,7 +1688,6 @@ async function dispatchAlert() {
   alerts.unshift(newAlert);
   localStorage.setItem('giri_alerts', JSON.stringify(alerts));
 
-  // 3. Trigger Push Notification
   if ("Notification" in window && Notification.permission === "granted") {
     new Notification(`GIRI RAKSHAK: ${severity.toUpperCase()} ALERT`, {
       body: `${title}\nRegion: ${region}`,
@@ -2094,7 +1727,6 @@ async function renderAlertsFeed() {
 
   let alerts = [];
 
-  // 1. Fetch live broadcast advisories from Render backend
   try {
     const res = await fetch(`${getApiBase()}/api/alerts/recent`, { cache: 'no-store' });
     if (res.ok) {
@@ -2113,7 +1745,6 @@ async function renderAlertsFeed() {
     console.warn('[Alerts] Could not pull from Render, checking local fallback.');
   }
 
-  // 2. Fallback to localStorage if cloud returns nothing
   if (alerts.length === 0) {
     alerts = JSON.parse(localStorage.getItem('giri_alerts') || '[]');
   }
@@ -2241,6 +1872,72 @@ function handleAuthAction() {
 
 function applyRoleUI() {
   const role = sessionStorage.getItem('userRole');
+
+  // 1. Assign body role class
+  if (role === 'citizen') {
+    document.body.classList.add('role-citizen');
+    document.body.classList.remove('role-official');
+  } else if (role === 'official') {
+    document.body.classList.add('role-official');
+    document.body.classList.remove('role-citizen');
+  }
+
+  // 2. Strict Citizen Clean-Up: Remove Heatmap and Susceptibility Layers
+  if (role === 'citizen' || !role) {
+    if (typeof heatLayerInstance !== 'undefined' && heatLayerInstance) {
+      map.removeLayer(heatLayerInstance);
+      heatLayerInstance = null;
+    }
+    if (typeof rasterHeatmapGroup !== 'undefined' && rasterHeatmapGroup) {
+      rasterHeatmapGroup.clearLayers();
+    }
+    if (typeof susceptibilityLayerGroup !== 'undefined' && susceptibilityLayerGroup) {
+      susceptibilityLayerGroup.clearLayers();
+    }
+    if (typeof currentMapMode !== 'undefined') {
+      currentMapMode = 'ner-ews';
+    }
+
+    // Target susceptibility classes injected by susceptibility.js
+    const suscClasses = [
+      '.sus-toggle', '.sus-btn', '.sus-help', '.sus-subtitle', 
+      '.sus-selection-message', '.sus-main-score', '.sus-compare', 
+      '.sus-location', '.sus-note', '.sus-gradient', '.sus-gradient-labels',
+      '#susceptibility-sidebar-panel', '.static-susceptibility-panel',
+      '.susceptibility-legend', '.static-susceptibility-card'
+    ];
+
+    suscClasses.forEach(selector => {
+      document.querySelectorAll(selector).forEach(el => {
+        el.style.display = 'none';
+      });
+    });
+
+    // If susceptibility.js wrapped controls in parent divs, hide them
+    document.querySelectorAll('.control-group').forEach(group => {
+      if (group.innerText.includes('MAP MODE') || group.innerText.includes('SUSCEPTIBILITY MODEL')) {
+        group.style.display = 'none';
+      }
+    });
+  } else if (role === 'official') {
+    // Restore controls for officials
+    document.querySelectorAll('.control-group').forEach(group => {
+      group.style.display = '';
+    });
+    
+    const suscClasses = [
+      '.sus-toggle', '.sus-help', '.sus-subtitle', '.sus-selection-message',
+      '.sus-main-score', '.sus-compare', '.sus-location', '.sus-note',
+      '.sus-gradient', '.sus-gradient-labels'
+    ];
+
+    suscClasses.forEach(selector => {
+      document.querySelectorAll(selector).forEach(el => {
+        el.style.display = '';
+      });
+    });
+  }
+
   const authBtn = document.getElementById('auth-action-btn');
   const reportBtn = document.getElementById('citizen-report-btn');
   const officialPanel = document.getElementById('official-alert-panel');
@@ -2248,18 +1945,7 @@ function applyRoleUI() {
 
   const publicView = document.getElementById('public-view-container');
   const officialView = document.getElementById('official-view-container');
-  const systemStatusPill = document.querySelector('.system-status-pill');
-  const legendEsp32Item = document.getElementById('legend-esp32') || document.querySelector('.legend-esp32-item');
 
-  // Role-based visibility for system status pill badge & legend hardware item
-  if (systemStatusPill) {
-    systemStatusPill.style.display = (role === 'citizen') ? 'none' : 'inline-flex';
-  }
-  if (legendEsp32Item) {
-    legendEsp32Item.style.display = (role === 'citizen') ? 'none' : 'flex';
-  }
-
-  // Re-render map layers to apply role-specific pin visibility
   renderAllNEROverview();
 
   if (role === 'official') {
@@ -2354,7 +2040,7 @@ function initDarkMode() {
 }
 
 // =========================================================================
-// 19. Boot System & Initial Execution
+// 19. Boot System
 // =========================================================================
 
 initChart();
@@ -2362,10 +2048,12 @@ renderAllNEROverview();
 loadBackendRiskZones();
 syncAllRegionalLiveFeeds();
 refreshTelemetry();
-startLiveSensorAlertMonitoring();
 initDarkMode();
 
-// Live Polling Intervals: Pull reports, alerts, and telemetry every few seconds
+map.whenReady(() => {
+  renderDendriticRidgeHeatmap(simulatedAIPredictions, false);
+});
+
 setInterval(() => {
   loadSavedCitizenReports();
   renderAlertsFeed();

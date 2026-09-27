@@ -217,7 +217,7 @@
         <div class="legend-item"><span class="dot very-high"></span> Very High (Red)</div>
         <div class="legend-item"><span class="dot extreme"></span> Critical / Immediate Risk (Dark Red)</div>
         <hr />
-        <div class="legend-item"><span class="dot sensor"></span> <b>Aizawl ESP32 Edge Station</b> (Demo Node)</div>
+        
         <div class="legend-item"><span class="dot citizen"></span> Ground Incident Pin</div>
         <div class="legend-note">Other districts display regional meteorological risk models.</div>
       `;

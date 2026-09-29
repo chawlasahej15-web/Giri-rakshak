@@ -48,6 +48,9 @@ class SensorReading(Base):
     moisture_pct = Column(Float, nullable=False)
     displacement_cm = Column(Float, nullable=False)
     timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    telemetry_json = Column(Text, nullable=True)
+    alert_level = Column(String(20), nullable=True)
+    system_state = Column(String(30), nullable=True)
 
     __table_args__ = (
         Index("ix_sensor_readings_sensor_time", "sensor_id", "timestamp"),

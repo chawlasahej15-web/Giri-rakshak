@@ -546,7 +546,49 @@ let selectedBackendZoneId = null;
 let telemetryViewMode = 'overview';
 
 function getApiBase() {
-  return 'https://giri-rakshak-zsk5.onrender.com';
+
+  const hostname =
+    window.location.hostname;
+
+  // Local frontend:
+  // http://127.0.0.1:5500
+  // http://localhost:5500
+  // http://192.168.x.x:5500
+  // -> local FastAPI :8000
+  const isLocal =
+
+    hostname === "" ||
+
+    hostname === "localhost" ||
+
+    hostname === "127.0.0.1" ||
+
+    /^192\.168\./.test(
+      hostname
+    ) ||
+
+    /^10\./.test(
+      hostname
+    ) ||
+
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(
+      hostname
+    );
+
+
+  if (isLocal) {
+
+    return (
+      `http://${hostname || "127.0.0.1"}:8000`
+    );
+  }
+
+
+  // Production Vercel frontend
+  // -> Render backend
+  return (
+    "https://giri-rakshak-zsk5.onrender.com"
+  );
 }
 
 async function loadBackendRiskZones() {
@@ -618,6 +660,389 @@ function formatSensorTime(timestamp) {
   return Number.isNaN(date.getTime()) ? timestamp : date.toLocaleString();
 }
 
+
+// GIRI_RAKSHAK_FULL_ESP32_TELEMETRY_UPDATE_V4
+// ============================================================
+// Updates every field from the SAME live ESP32 reading that
+// already powers Tilt / Soil in the existing dashboard.
+// ============================================================
+
+function updateFullEsp32Telemetry(
+  reading
+) {
+
+  if (!reading) {
+    return;
+  }
+
+
+  function set(
+    id,
+    value,
+    digits = 2,
+    unit = ""
+  ) {
+
+    const el =
+      document.getElementById(id);
+
+    if (!el) {
+      return;
+    }
+
+
+    if (
+      value === null ||
+      value === undefined ||
+      value === ""
+    ) {
+
+      el.textContent =
+        "—";
+
+      return;
+    }
+
+
+    const n =
+      Number(value);
+
+
+    if (
+      !Number.isFinite(n)
+    ) {
+
+      el.textContent =
+        "—";
+
+      return;
+    }
+
+
+    el.textContent =
+      n.toFixed(digits)
+      +
+      (
+        unit
+        ?
+        ` ${unit}`
+        :
+        ""
+      );
+  }
+
+
+  function setText(
+    id,
+    value
+  ) {
+
+    const el =
+      document.getElementById(id);
+
+    if (!el) {
+      return;
+    }
+
+
+    el.textContent =
+      (
+        value === null ||
+        value === undefined ||
+        value === ""
+      )
+      ?
+      "—"
+      :
+      String(value);
+  }
+
+
+  // ----------------------------------------------------------
+  // STATE
+  // ----------------------------------------------------------
+
+  setText(
+    "full-sensor-id",
+    reading.sensor_id
+  );
+
+
+  setText(
+    "full-alert-level",
+    reading.alert_level
+  );
+
+
+  setText(
+    "full-system-state",
+    reading.system_state
+  );
+
+
+  setText(
+    "full-updated",
+    reading.timestamp
+      ?
+      new Date(
+        reading.timestamp
+      ).toLocaleTimeString()
+      :
+      "—"
+  );
+
+
+  // ----------------------------------------------------------
+  // LOCATION
+  // ----------------------------------------------------------
+
+  set(
+    "full-lat",
+    reading.lat,
+    6
+  );
+
+
+  set(
+    "full-lon",
+    reading.lon,
+    6
+  );
+
+
+  // ----------------------------------------------------------
+  // TILT
+  // ----------------------------------------------------------
+
+  set(
+    "full-tilt",
+    reading.tilt_deg,
+    3,
+    "°"
+  );
+
+
+  set(
+    "full-tilt-change",
+    reading.tilt_change_deg,
+    3,
+    "°"
+  );
+
+
+  set(
+    "full-tilt-rate",
+    reading.tilt_rate_dph,
+    3,
+    "°/h"
+  );
+
+
+  set(
+    "full-tilt-10s",
+    reading.tilt_sudden_change_10s_deg,
+    3,
+    "°"
+  );
+
+
+  // ----------------------------------------------------------
+  // ACCELERATION
+  // ----------------------------------------------------------
+
+  set(
+    "full-accel-x",
+    reading.accel_x_g,
+    4,
+    "g"
+  );
+
+
+  set(
+    "full-accel-y",
+    reading.accel_y_g,
+    4,
+    "g"
+  );
+
+
+  set(
+    "full-accel-z",
+    reading.accel_z_g,
+    4,
+    "g"
+  );
+
+
+  set(
+    "full-accel-mag",
+    reading.accel_magnitude_g,
+    4,
+    "g"
+  );
+
+
+  set(
+    "full-accel-jump",
+    reading.accel_jump_g,
+    4,
+    "g"
+  );
+
+
+  set(
+    "full-vibration",
+    reading.vibration_rms_g,
+    5,
+    "g"
+  );
+
+
+  set(
+    "full-movement",
+    reading.movement_ratio,
+    2,
+    "x"
+  );
+
+
+  // ----------------------------------------------------------
+  // SOIL
+  // ----------------------------------------------------------
+
+  set(
+    "full-soil",
+    reading.moisture_pct,
+    2,
+    "%"
+  );
+
+
+  set(
+    "full-soil-change",
+    reading.moisture_change_pct,
+    2,
+    "%"
+  );
+
+
+  set(
+    "full-soil-rate",
+    reading.moisture_rate_pph,
+    2,
+    "%/h"
+  );
+
+
+  // ----------------------------------------------------------
+  // DISTANCE
+  // ----------------------------------------------------------
+
+  set(
+    "full-distance",
+    reading.distance_cm,
+    2,
+    "cm"
+  );
+
+
+  set(
+    "full-distance-change",
+    reading.distance_change_cm,
+    3,
+    "cm"
+  );
+
+
+  set(
+    "full-distance-rate",
+    reading.distance_rate_cmh,
+    2,
+    "cm/h"
+  );
+
+
+  set(
+    "full-displacement",
+    reading.displacement_cm,
+    3,
+    "cm"
+  );
+
+
+  // ----------------------------------------------------------
+  // ENVIRONMENT
+  // ----------------------------------------------------------
+
+  set(
+    "full-pressure",
+    reading.pressure_hpa,
+    2,
+    "hPa"
+  );
+
+
+  set(
+    "full-temperature",
+    reading.temperature_c,
+    2,
+    "°C"
+  );
+
+
+  set(
+    "full-humidity",
+    reading.humidity_pct,
+    2,
+    "%"
+  );
+
+
+  set(
+    "full-rainfall",
+    reading.rainfall_mm,
+    2,
+    "mm"
+  );
+
+
+  const status =
+    document.getElementById(
+      "full-esp32-status"
+    );
+
+  if (status) {
+
+    status.textContent =
+      "Live ESP32 hardware • Updated "
+      +
+      new Date()
+        .toLocaleTimeString();
+
+    status.style.color =
+      "#86efac";
+  }
+
+
+  const live =
+    document.getElementById(
+      "full-esp32-live-badge"
+    );
+
+  if (live) {
+
+    live.textContent =
+      "LIVE HARDWARE";
+
+    live.style.background =
+      "#14532d";
+
+    live.style.color =
+      "#86efac";
+  }
+}
+
+
 async function loadLatestSensorTelemetry() {
   if (telemetryViewMode !== 'hardware') return null;
   return loadLatestSensorTelemetryBySensorId('ESP32_01');
@@ -635,6 +1060,7 @@ async function loadLatestSensorTelemetryBySensorId(sensorId) {
 
     const reading = data.reading;
     latestSensorReading = reading;
+    updateFullEsp32Telemetry(reading);
     const tilt = Number(reading.tilt_deg);
     const moisture = Number(reading.moisture_pct);
 
@@ -1955,48 +2381,170 @@ function isReactiveSensorAlert(alert) {
   return zoneId === 'ESP32_01' && level === 'critical' && isHardwareAlert;
 }
 
+
+// ============================================================
+// HARDWARE / ESP32 ALERT DETECTOR
+// ============================================================
+
+function isHardwareSensorAlert(alert) {
+
+  if (!alert) {
+    return false;
+  }
+
+  // IMPORTANT:
+  // Only alerts explicitly generated by the new ESP32
+  // sensor-alert backend are eligible for the popup.
+  //
+  // Legacy alerts such as:
+  // "Abnormal sensor threshold detected"
+  // are intentionally ignored.
+
+  const source = String(
+    alert.source ||
+    alert.alert_source ||
+    ""
+  )
+    .trim()
+    .toLowerCase();
+
+  return source === "sensor";
+}
+
 async function pollLiveSensorAlerts() {
+
   try {
-    const alerts = await fetchRecentAlerts();
-    const sensorAlerts = alerts.filter(isReactiveSensorAlert);
 
-    if (sensorAlerts.length === 0) {
-      liveAlertMonitorInitialized = true;
+    const alerts =
+      await fetchRecentAlerts();
+
+
+    const sensorAlerts =
+      alerts.filter(
+        isHardwareSensorAlert
+      );
+
+
+    // --------------------------------------------------------
+    // No active ESP32 sensor alert
+    // --------------------------------------------------------
+
+    if (
+      sensorAlerts.length === 0
+    ) {
+
+      liveAlertMonitorInitialized =
+        true;
+
+      hideLiveSensorAlert();
+
       return;
     }
 
-    const latestAlert = sensorAlerts[0];
-    const alertId = Number(latestAlert.alert_id || 0);
 
-    if (!liveAlertMonitorInitialized) {
-      latestSeenAlertId = alertId;
-      liveAlertMonitorInitialized = true;
-      return;
-    }
+    // --------------------------------------------------------
+    // Most recent active ESP32 alert
+    // --------------------------------------------------------
 
-    if (alertId > 0 && alertId <= latestSeenAlertId) return;
-    if (alertId > 0) latestSeenAlertId = alertId;
+    const latestAlert =
+      sensorAlerts[0];
+
+
+    const alertId =
+      Number(
+        latestAlert.alert_id ||
+        latestAlert.id ||
+        0
+      );
+
+
+    latestSeenAlertId =
+      Math.max(
+        latestSeenAlertId,
+        alertId
+      );
+
+
+    liveAlertMonitorInitialized =
+      true;
+
+
+    // --------------------------------------------------------
+    // Fetch latest physical telemetry
+    // --------------------------------------------------------
 
     let reading = null;
-    const zoneId = latestAlert.zone_id;
+
+    const zoneId =
+      latestAlert.zone_id ||
+      latestAlert.sensor_id;
+
 
     if (zoneId) {
+
       try {
-        const sensorResponse = await fetch(
-          `${getApiBase()}/api/sensor-data/latest/${encodeURIComponent(zoneId)}`,
-          { cache: 'no-store' }
-        );
-        if (sensorResponse.ok) {
-          const sensorData = await sensorResponse.json();
-          if (sensorData.status === 'ok' && sensorData.reading) {
-            reading = sensorData.reading;
+
+        const sensorResponse =
+          await fetch(
+            `${getApiBase()}/api/sensor-data/latest/${encodeURIComponent(zoneId)}`,
+            {
+              cache:
+                "no-store"
+            }
+          );
+
+
+        if (
+          sensorResponse.ok
+        ) {
+
+          const sensorData =
+            await sensorResponse.json();
+
+
+          if (
+            sensorData.status === "ok" &&
+            sensorData.reading
+          ) {
+
+            reading =
+              sensorData.reading;
           }
         }
-      } catch (sensorError) {}
+
+      } catch (
+        sensorError
+      ) {
+
+        console.warn(
+          "[ESP32] Telemetry fetch failed:",
+          sensorError
+        );
+      }
     }
 
-    showLiveSensorAlert(latestAlert, reading);
-  } catch (error) {}
+
+    // --------------------------------------------------------
+    // Show active alert
+    // --------------------------------------------------------
+
+    showLiveSensorAlert(
+      latestAlert,
+      reading
+    );
+
+    showSensorAlertPopup(
+      latestAlert,
+      reading
+    );
+
+  } catch (error) {
+
+    console.warn(
+      "[ESP32] Alert polling failed:",
+      error
+    );
+  }
 }
 
 function startLiveSensorAlertMonitoring() {
@@ -2384,3 +2932,1757 @@ window.addEventListener('resize', () => {
 });
 
 document.addEventListener('DOMContentLoaded', applyRoleUI);
+
+// ============================================================
+// LIVE SENSOR ALERT POPUP
+// ============================================================
+
+function showSensorAlertPopup(
+  alert,
+  reading = null
+) {
+
+  if (!alert) {
+    return;
+  }
+
+
+  // ----------------------------------------------------------
+  // Ignore inactive / normal alerts
+  // ----------------------------------------------------------
+
+  const activeValue =
+    alert.is_active;
+
+  if (
+    activeValue === false ||
+    activeValue === "false" ||
+    activeValue === 0
+  ) {
+    return;
+  }
+
+
+  const level =
+    String(
+      alert.risk_level ||
+      alert.alert_level ||
+      "warning"
+    )
+    .toLowerCase();
+
+
+  if (
+    level === "normal" ||
+    level === "none"
+  ) {
+    return;
+  }
+
+
+  // ----------------------------------------------------------
+  // Create a stable ID for this alert event
+  // ----------------------------------------------------------
+
+  const alertId =
+    String(
+      alert.alert_id ||
+      alert.id ||
+      (
+        String(
+          alert.timestamp ||
+          ""
+        )
+        +
+        "|"
+        +
+        String(
+          alert.message ||
+          ""
+        )
+      )
+    );
+
+
+  // Same alert event:
+  // do NOT keep opening the popup every polling cycle.
+  if (
+    window.__giriRakshakLastPopupAlertId
+    ===
+    alertId
+  ) {
+    return;
+  }
+
+
+  window.__giriRakshakLastPopupAlertId =
+    alertId;
+
+
+  // ----------------------------------------------------------
+  // Remove old popup if one exists
+  // ----------------------------------------------------------
+
+  const oldPopup =
+    document.getElementById(
+      "giri-sensor-alert-popup"
+    );
+
+  if (oldPopup) {
+    oldPopup.remove();
+  }
+
+
+  // ----------------------------------------------------------
+  // Severity
+  // ----------------------------------------------------------
+
+  let accent =
+    "#f59e0b";
+
+  let title =
+    "SENSOR WARNING";
+
+  if (
+    level === "critical"
+  ) {
+
+    accent =
+      "#ef4444";
+
+    title =
+      "🚨 CRITICAL SENSOR ALERT";
+
+  } else if (
+    level === "watch"
+  ) {
+
+    accent =
+      "#eab308";
+
+    title =
+      "⚠ SENSOR WATCH";
+
+  } else if (
+    level === "very_high"
+  ) {
+
+    accent =
+      "#dc2626";
+
+    title =
+      "🚨 VERY HIGH SENSOR ALERT";
+  }
+
+
+  // ----------------------------------------------------------
+  // Overlay
+  // ----------------------------------------------------------
+
+  const overlay =
+    document.createElement(
+      "div"
+    );
+
+  overlay.id =
+    "giri-sensor-alert-popup";
+
+
+  Object.assign(
+    overlay.style,
+    {
+
+      position:
+        "fixed",
+
+      inset:
+        "0",
+
+      zIndex:
+        "99999",
+
+      display:
+        "flex",
+
+      alignItems:
+        "flex-start",
+
+      justifyContent:
+        "center",
+
+      paddingTop:
+        "85px",
+
+      background:
+        "rgba(0,0,0,0.28)",
+
+      backdropFilter:
+        "blur(2px)",
+    }
+  );
+
+
+  // ----------------------------------------------------------
+  // Card
+  // ----------------------------------------------------------
+
+  const card =
+    document.createElement(
+      "div"
+    );
+
+
+  Object.assign(
+    card.style,
+    {
+
+      width:
+        "min(560px, calc(100vw - 32px))",
+
+      boxSizing:
+        "border-box",
+
+      background:
+        "#ffffff",
+
+      borderRadius:
+        "16px",
+
+      border:
+        `4px solid ${accent}`,
+
+      boxShadow:
+        "0 20px 60px rgba(0,0,0,0.35)",
+
+      overflow:
+        "hidden",
+
+      fontFamily:
+        "Arial, sans-serif",
+
+      animation:
+        "giriSensorPopupIn 0.22s ease-out",
+
+    }
+  );
+
+
+  // ----------------------------------------------------------
+  // Header
+  // ----------------------------------------------------------
+
+  const header =
+    document.createElement(
+      "div"
+    );
+
+
+  Object.assign(
+    header.style,
+    {
+
+      background:
+        accent,
+
+      color:
+        "#ffffff",
+
+      padding:
+        "16px 20px",
+
+      display:
+        "flex",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "space-between",
+
+      gap:
+        "15px",
+
+    }
+  );
+
+
+  const heading =
+    document.createElement(
+      "div"
+    );
+
+
+  heading.textContent =
+    title;
+
+
+  heading.style.fontWeight =
+    "800";
+
+
+  heading.style.fontSize =
+    "18px";
+
+
+  const close =
+    document.createElement(
+      "button"
+    );
+
+
+  close.textContent =
+    "×";
+
+
+  Object.assign(
+    close.style,
+    {
+
+      border:
+        "none",
+
+      background:
+        "rgba(255,255,255,0.2)",
+
+      color:
+        "#ffffff",
+
+      width:
+        "34px",
+
+      height:
+        "34px",
+
+      borderRadius:
+        "8px",
+
+      fontSize:
+        "24px",
+
+      lineHeight:
+        "1",
+
+      cursor:
+        "pointer",
+
+    }
+  );
+
+
+  header.appendChild(
+    heading
+  );
+
+  header.appendChild(
+    close
+  );
+
+
+  // ----------------------------------------------------------
+  // Body
+  // ----------------------------------------------------------
+
+  const body =
+    document.createElement(
+      "div"
+    );
+
+
+  Object.assign(
+    body.style,
+    {
+
+      padding:
+        "20px",
+
+      color:
+        "#172033",
+
+    }
+  );
+
+
+  const message =
+    document.createElement(
+      "div"
+    );
+
+
+  message.textContent =
+    String(
+      alert.message ||
+      "ESP32 reported an active sensor alert."
+    );
+
+
+  Object.assign(
+    message.style,
+    {
+
+      fontSize:
+        "16px",
+
+      lineHeight:
+        "1.5",
+
+      fontWeight:
+        "600",
+
+      marginBottom:
+        "16px",
+
+    }
+  );
+
+
+  body.appendChild(
+    message
+  );
+
+
+  // ----------------------------------------------------------
+  // Telemetry block
+  // ----------------------------------------------------------
+
+  if (reading) {
+
+    const telemetry =
+      document.createElement(
+        "div"
+      );
+
+
+    Object.assign(
+      telemetry.style,
+      {
+
+        display:
+          "grid",
+
+        gridTemplateColumns:
+          "repeat(2, minmax(0, 1fr))",
+
+        gap:
+          "10px",
+
+      }
+    );
+
+
+    const fields = [
+
+      [
+        "Tilt",
+        reading.tilt_deg,
+        "°"
+      ],
+
+      [
+        "Tilt Change",
+        reading.tilt_change_deg,
+        "°"
+      ],
+
+      [
+        "Tilt Rate",
+        reading.tilt_rate_dph,
+        "°/h"
+      ],
+
+      [
+        "10s Tilt",
+        reading.tilt_sudden_change_10s_deg,
+        "°"
+      ],
+
+      [
+        "Soil",
+        reading.moisture_pct,
+        "%"
+      ],
+
+      [
+        "Distance",
+        reading.distance_cm,
+        " cm"
+      ],
+
+      [
+        "Distance Change",
+        reading.distance_change_cm,
+        " cm"
+      ],
+
+      [
+        "Movement",
+        reading.movement_ratio,
+        "x"
+      ],
+
+    ];
+
+
+    fields.forEach(
+      ([label, value, unit]) => {
+
+        if (
+          value === null ||
+          value === undefined ||
+          Number.isNaN(
+            Number(value)
+          )
+        ) {
+          return;
+        }
+
+
+        const item =
+          document.createElement(
+            "div"
+          );
+
+
+        Object.assign(
+          item.style,
+          {
+
+            background:
+              "#f3f6fa",
+
+            borderRadius:
+              "10px",
+
+            padding:
+              "11px 12px",
+
+          }
+        );
+
+
+        const labelNode =
+          document.createElement(
+            "div"
+          );
+
+
+        labelNode.textContent =
+          label;
+
+
+        labelNode.style.fontSize =
+          "11px";
+
+
+        labelNode.style.color =
+          "#657184";
+
+
+        const valueNode =
+          document.createElement(
+            "div"
+          );
+
+
+        let number =
+          Number(value);
+
+
+        valueNode.textContent =
+          (
+            Math.abs(number) >= 100
+              ? number.toFixed(1)
+              : number.toFixed(2)
+          )
+          +
+          unit;
+
+
+        valueNode.style.fontWeight =
+          "800";
+
+
+        valueNode.style.fontSize =
+          "15px";
+
+
+        item.appendChild(
+          labelNode
+        );
+
+        item.appendChild(
+          valueNode
+        );
+
+        telemetry.appendChild(
+          item
+        );
+      }
+    );
+
+
+    body.appendChild(
+      telemetry
+    );
+  }
+
+
+  // ----------------------------------------------------------
+  // Footer
+  // ----------------------------------------------------------
+
+  const footer =
+    document.createElement(
+      "div"
+    );
+
+
+  footer.textContent =
+    `Zone: ${
+      alert.zone_id ||
+      alert.sensor_id ||
+      "ESP32"
+    }`;
+
+
+  Object.assign(
+    footer.style,
+    {
+
+      marginTop:
+        "16px",
+
+      fontSize:
+        "12px",
+
+      color:
+        "#718096",
+
+    }
+  );
+
+
+  body.appendChild(
+    footer
+  );
+
+
+  card.appendChild(
+    header
+  );
+
+  card.appendChild(
+    body
+  );
+
+  overlay.appendChild(
+    card
+  );
+
+
+  document.body.appendChild(
+    overlay
+  );
+
+
+  // ----------------------------------------------------------
+  // Close handlers
+  // ----------------------------------------------------------
+
+  close.onclick =
+    () => {
+
+      overlay.remove();
+
+    };
+
+
+  overlay.onclick =
+    (event) => {
+
+      if (
+        event.target
+        ===
+        overlay
+      ) {
+
+        overlay.remove();
+
+      }
+
+    };
+
+
+  // Escape key
+  const escapeHandler =
+    (event) => {
+
+      if (
+        event.key
+        ===
+        "Escape"
+      ) {
+
+        overlay.remove();
+
+        document.removeEventListener(
+          "keydown",
+          escapeHandler
+        );
+      }
+    };
+
+
+  document.addEventListener(
+    "keydown",
+    escapeHandler
+  );
+
+
+  // ----------------------------------------------------------
+  // Automatically hide after 12 seconds
+  // ----------------------------------------------------------
+
+  window.setTimeout(
+    () => {
+
+      if (
+        document.body.contains(
+          overlay
+        )
+      ) {
+
+        overlay.remove();
+
+      }
+
+      document.removeEventListener(
+        "keydown",
+        escapeHandler
+      );
+
+    },
+    12000
+  );
+}
+
+
+// Popup animation
+if (
+  !document.getElementById(
+    "giri-sensor-popup-style"
+  )
+) {
+
+  const style =
+    document.createElement(
+      "style"
+    );
+
+  style.id =
+    "giri-sensor-popup-style";
+
+  style.textContent = `
+    @keyframes giriSensorPopupIn {
+      from {
+        opacity: 0;
+        transform: translateY(-18px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+  `;
+
+  document.head.appendChild(
+    style
+  );
+}
+
+// GIRI_RAKSHAK_FULL_ESP32_TELEMETRY_V2
+// ============================================================
+// FULL ESP32 EDGE TELEMETRY
+// Reads the latest complete ESP32 payload from FastAPI.
+// Existing dashboard UI is left untouched.
+// ============================================================
+
+(function () {
+
+  const PANEL_ID =
+    "giri-full-esp32-telemetry";
+
+  const GRID_ID =
+    "giri-full-esp32-telemetry-grid";
+
+  const STATUS_ID =
+    "giri-full-esp32-telemetry-status";
+
+
+  // ----------------------------------------------------------
+  // API BASE
+  // ----------------------------------------------------------
+
+  function apiBase() {
+
+    if (
+      typeof getApiBase === "function"
+    ) {
+
+      return getApiBase();
+
+    }
+
+    const host =
+      window.location.hostname;
+
+    if (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      /^192\.168\./.test(host) ||
+      /^10\./.test(host)
+    ) {
+
+      return (
+        "http://"
+        +
+        (host || "127.0.0.1")
+        +
+        ":8000"
+      );
+
+    }
+
+    return (
+      "https://giri-rakshak-zsk5.onrender.com"
+    );
+  }
+
+
+  // ----------------------------------------------------------
+  // VALUE FORMAT
+  // ----------------------------------------------------------
+
+  function fmt(
+    value,
+    digits = 2,
+    unit = ""
+  ) {
+
+    if (
+      value === null ||
+      value === undefined ||
+      value === ""
+    ) {
+
+      return "—";
+    }
+
+
+    const n =
+      Number(value);
+
+
+    if (
+      !Number.isFinite(n)
+    ) {
+
+      return "—";
+    }
+
+
+    return (
+      n.toFixed(digits)
+      +
+      (
+        unit
+        ?
+        ` ${unit}`
+        :
+        ""
+      )
+    );
+  }
+
+
+  // ----------------------------------------------------------
+  // FIELD
+  // ----------------------------------------------------------
+
+  function addField(
+    grid,
+    label,
+    value,
+    digits = 2,
+    unit = ""
+  ) {
+
+    const box =
+      document.createElement(
+        "div"
+      );
+
+
+    box.className =
+      "giri-full-esp32-field";
+
+
+    const labelNode =
+      document.createElement(
+        "div"
+      );
+
+
+    labelNode.className =
+      "giri-full-esp32-label";
+
+
+    labelNode.textContent =
+      label;
+
+
+    const valueNode =
+      document.createElement(
+        "div"
+      );
+
+
+    valueNode.className =
+      "giri-full-esp32-value";
+
+
+    valueNode.textContent =
+      fmt(
+        value,
+        digits,
+        unit
+      );
+
+
+    box.appendChild(
+      labelNode
+    );
+
+
+    box.appendChild(
+      valueNode
+    );
+
+
+    grid.appendChild(
+      box
+    );
+  }
+
+
+  // ----------------------------------------------------------
+  // TEXT FIELD
+  // ----------------------------------------------------------
+
+  function addTextField(
+    grid,
+    label,
+    value
+  ) {
+
+    const box =
+      document.createElement(
+        "div"
+      );
+
+
+    box.className =
+      "giri-full-esp32-field";
+
+
+    const labelNode =
+      document.createElement(
+        "div"
+      );
+
+
+    labelNode.className =
+      "giri-full-esp32-label";
+
+
+    labelNode.textContent =
+      label;
+
+
+    const valueNode =
+      document.createElement(
+        "div"
+      );
+
+
+    valueNode.className =
+      "giri-full-esp32-value";
+
+
+    valueNode.textContent =
+      (
+        value === null ||
+        value === undefined ||
+        value === ""
+      )
+      ?
+      "—"
+      :
+      String(value);
+
+
+    box.appendChild(
+      labelNode
+    );
+
+
+    box.appendChild(
+      valueNode
+    );
+
+
+    grid.appendChild(
+      box
+    );
+  }
+
+
+  // ----------------------------------------------------------
+  // FIND EXISTING ESP32 TELEMETRY CARD
+  // ----------------------------------------------------------
+
+  function findTelemetryCard() {
+
+    const elements =
+      Array.from(
+        document.querySelectorAll(
+          "h1,h2,h3,h4,h5,div"
+        )
+      );
+
+
+    const heading =
+      elements.find(
+        el =>
+          String(
+            el.textContent || ""
+          )
+          .trim()
+          .includes(
+            "ESP32 EDGE TELEMETRY"
+          )
+      );
+
+
+    if (!heading) {
+      return null;
+    }
+
+
+    let current =
+      heading;
+
+
+    for (
+      let i = 0;
+      i < 10 && current;
+      i++
+    ) {
+
+      const text =
+        String(
+          current.innerText || ""
+        );
+
+
+      if (
+        text.includes(
+          "Tilt Angle"
+        )
+        &&
+        text.includes(
+          "Soil Moisture"
+        )
+      ) {
+
+        return current;
+      }
+
+
+      current =
+        current.parentElement;
+    }
+
+
+    return null;
+  }
+
+
+  // ----------------------------------------------------------
+  // CREATE PANEL
+  // ----------------------------------------------------------
+
+  function ensurePanel() {
+
+    let panel =
+      document.getElementById(
+        PANEL_ID
+      );
+
+
+    if (panel) {
+      return panel;
+    }
+
+
+    const card =
+      findTelemetryCard();
+
+
+    if (!card) {
+      return null;
+    }
+
+
+    panel =
+      document.createElement(
+        "section"
+      );
+
+
+    panel.id =
+      PANEL_ID;
+
+
+    const title =
+      document.createElement(
+        "div"
+      );
+
+
+    title.className =
+      "giri-full-esp32-title";
+
+
+    title.textContent =
+      "FULL ESP32 EDGE TELEMETRY";
+
+
+    const status =
+      document.createElement(
+        "div"
+      );
+
+
+    status.id =
+      STATUS_ID;
+
+
+    status.className =
+      "giri-full-esp32-status";
+
+
+    status.textContent =
+      "Waiting for live ESP32 data...";
+
+
+    const grid =
+      document.createElement(
+        "div"
+      );
+
+
+    grid.id =
+      GRID_ID;
+
+
+    grid.className =
+      "giri-full-esp32-grid";
+
+
+    panel.appendChild(
+      title
+    );
+
+
+    panel.appendChild(
+      status
+    );
+
+
+    panel.appendChild(
+      grid
+    );
+
+
+    card.appendChild(
+      panel
+    );
+
+
+    return panel;
+  }
+
+
+  // ----------------------------------------------------------
+  // RENDER COMPLETE TELEMETRY
+  // ----------------------------------------------------------
+
+  function render(
+    reading
+  ) {
+
+    const panel =
+      ensurePanel();
+
+
+    if (!panel) {
+      return;
+    }
+
+
+    const grid =
+      document.getElementById(
+        GRID_ID
+      );
+
+
+    const status =
+      document.getElementById(
+        STATUS_ID
+      );
+
+
+    if (!grid) {
+      return;
+    }
+
+
+    grid.innerHTML =
+      "";
+
+
+    // ========================================================
+    // SENSOR / STATE
+    // ========================================================
+
+    addTextField(
+      grid,
+      "Sensor ID",
+      reading.sensor_id
+    );
+
+
+    addTextField(
+      grid,
+      "Alert Level",
+      reading.alert_level
+    );
+
+
+    addTextField(
+      grid,
+      "System State",
+      reading.system_state
+    );
+
+
+    addTextField(
+      grid,
+      "Updated",
+      reading.timestamp
+        ?
+        new Date(
+          reading.timestamp
+        ).toLocaleString()
+        :
+        null
+    );
+
+
+    // ========================================================
+    // LOCATION
+    // ========================================================
+
+    addField(
+      grid,
+      "Latitude",
+      reading.lat,
+      6
+    );
+
+
+    addField(
+      grid,
+      "Longitude",
+      reading.lon,
+      6
+    );
+
+
+    // ========================================================
+    // TILT
+    // ========================================================
+
+    addField(
+      grid,
+      "Tilt Angle",
+      reading.tilt_deg,
+      3,
+      "°"
+    );
+
+
+    addField(
+      grid,
+      "Tilt Change",
+      reading.tilt_change_deg,
+      3,
+      "°"
+    );
+
+
+    addField(
+      grid,
+      "Tilt Rate",
+      reading.tilt_rate_dph,
+      3,
+      "°/h"
+    );
+
+
+    addField(
+      grid,
+      "Tilt 10s Change",
+      reading.tilt_sudden_change_10s_deg,
+      3,
+      "°"
+    );
+
+
+    // ========================================================
+    // ACCELERATION
+    // ========================================================
+
+    addField(
+      grid,
+      "Accel X",
+      reading.accel_x_g,
+      4,
+      "g"
+    );
+
+
+    addField(
+      grid,
+      "Accel Y",
+      reading.accel_y_g,
+      4,
+      "g"
+    );
+
+
+    addField(
+      grid,
+      "Accel Z",
+      reading.accel_z_g,
+      4,
+      "g"
+    );
+
+
+    addField(
+      grid,
+      "Accel Magnitude",
+      reading.accel_magnitude_g,
+      4,
+      "g"
+    );
+
+
+    addField(
+      grid,
+      "Accel Jump",
+      reading.accel_jump_g,
+      4,
+      "g"
+    );
+
+
+    addField(
+      grid,
+      "Vibration RMS",
+      reading.vibration_rms_g,
+      5,
+      "g"
+    );
+
+
+    addField(
+      grid,
+      "Movement Ratio",
+      reading.movement_ratio,
+      2,
+      "x"
+    );
+
+
+    // ========================================================
+    // SOIL
+    // ========================================================
+
+    addField(
+      grid,
+      "Soil Moisture",
+      reading.moisture_pct,
+      2,
+      "%"
+    );
+
+
+    addField(
+      grid,
+      "Soil Change",
+      reading.moisture_change_pct,
+      2,
+      "%"
+    );
+
+
+    addField(
+      grid,
+      "Soil Rate",
+      reading.moisture_rate_pph,
+      2,
+      "%/h"
+    );
+
+
+    // ========================================================
+    // DISTANCE
+    // ========================================================
+
+    addField(
+      grid,
+      "Distance",
+      reading.distance_cm,
+      2,
+      "cm"
+    );
+
+
+    addField(
+      grid,
+      "Distance Change",
+      reading.distance_change_cm,
+      3,
+      "cm"
+    );
+
+
+    addField(
+      grid,
+      "Distance Rate",
+      reading.distance_rate_cmh,
+      2,
+      "cm/h"
+    );
+
+
+    addField(
+      grid,
+      "Displacement",
+      reading.displacement_cm,
+      3,
+      "cm"
+    );
+
+
+    // ========================================================
+    // ENVIRONMENT
+    // ========================================================
+
+    addField(
+      grid,
+      "BMP Pressure",
+      reading.pressure_hpa,
+      2,
+      "hPa"
+    );
+
+
+    addField(
+      grid,
+      "BMP Temperature",
+      reading.temperature_c,
+      2,
+      "°C"
+    );
+
+
+    addField(
+      grid,
+      "DHT Humidity",
+      reading.humidity_pct,
+      2,
+      "%"
+    );
+
+
+    addField(
+      grid,
+      "Rainfall",
+      reading.rainfall_mm,
+      2,
+      "mm"
+    );
+
+
+    // ========================================================
+    // STATUS
+    // ========================================================
+
+    if (status) {
+
+      status.textContent =
+        (
+          "LIVE • ESP32 • Updated "
+          +
+          new Date()
+            .toLocaleTimeString()
+        );
+
+      status.style.color =
+        "#86efac";
+    }
+  }
+
+
+  // ----------------------------------------------------------
+  // FETCH LATEST ESP32 TELEMETRY
+  // ----------------------------------------------------------
+
+  async function update() {
+
+    try {
+
+      const response =
+        await fetch(
+          apiBase()
+          +
+          "/api/sensor-data/latest/ESP32_01",
+          {
+            cache:
+              "no-store"
+          }
+        );
+
+
+      if (!response.ok) {
+
+        throw new Error(
+          `HTTP ${response.status}`
+        );
+      }
+
+
+      const data =
+        await response.json();
+
+
+      if (
+        data.status !== "ok"
+        ||
+        !data.reading
+      ) {
+
+        return;
+      }
+
+
+      render(
+        data.reading
+      );
+
+
+    } catch (error) {
+
+      const status =
+        document.getElementById(
+          STATUS_ID
+        );
+
+
+      if (status) {
+
+        status.textContent =
+          "ESP32 telemetry unavailable";
+
+        status.style.color =
+          "#fca5a5";
+      }
+
+
+      console.warn(
+        "[ESP32 FULL TELEMETRY]",
+        error
+      );
+    }
+  }
+
+
+  // ----------------------------------------------------------
+  // STYLES
+  // ----------------------------------------------------------
+
+  function injectStyles() {
+
+    if (
+      document.getElementById(
+        "giri-full-esp32-telemetry-style"
+      )
+    ) {
+
+      return;
+    }
+
+
+    const style =
+      document.createElement(
+        "style"
+      );
+
+
+    style.id =
+      "giri-full-esp32-telemetry-style";
+
+
+    style.textContent = `
+
+      #${PANEL_ID} {
+        margin-top: 14px;
+        padding: 14px;
+        border-radius: 12px;
+        background: #0f172a;
+        color: #ffffff;
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      #${PANEL_ID}
+      .giri-full-esp32-title {
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.4px;
+        margin-bottom: 5px;
+      }
+
+      #${PANEL_ID}
+      .giri-full-esp32-status {
+        font-size: 10px;
+        color: #94a3b8;
+        margin-bottom: 11px;
+      }
+
+      #${PANEL_ID}
+      .giri-full-esp32-grid {
+        display: grid;
+        grid-template-columns:
+          repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        max-height: 470px;
+        overflow-y: auto;
+        padding-right: 3px;
+      }
+
+      #${PANEL_ID}
+      .giri-full-esp32-field {
+        background: #182235;
+        border: 1px solid #26344d;
+        border-radius: 8px;
+        padding: 8px 9px;
+        min-width: 0;
+      }
+
+      #${PANEL_ID}
+      .giri-full-esp32-label {
+        color: #94a3b8;
+        font-size: 9px;
+        margin-bottom: 3px;
+        line-height: 1.2;
+      }
+
+      #${PANEL_ID}
+      .giri-full-esp32-value {
+        color: #f8fafc;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.25;
+        word-break: break-word;
+      }
+
+      @media (max-width: 700px) {
+
+        #${PANEL_ID}
+        .giri-full-esp32-grid {
+          grid-template-columns: 1fr;
+        }
+
+      }
+
+    `;
+
+
+    document.head.appendChild(
+      style
+    );
+  }
+
+
+  // ----------------------------------------------------------
+  // START
+  // ----------------------------------------------------------
+
+  function start() {
+
+    injectStyles();
+
+    update();
+
+
+    window.setInterval(
+      update,
+      5000
+    );
+  }
+
+
+  if (
+    document.readyState
+    ===
+    "loading"
+  ) {
+
+    document.addEventListener(
+      "DOMContentLoaded",
+      () => {
+
+        window.setTimeout(
+          start,
+          800
+        );
+
+      },
+      {
+        once: true
+      }
+    );
+
+  } else {
+
+    window.setTimeout(
+      start,
+      800
+    );
+  }
+
+})();

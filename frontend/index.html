@@ -371,7 +371,247 @@
           <div style="height: 120px; position: relative;">
             <canvas id="telemetryChart"></canvas>
           </div>
-        </section>
+        
+<!-- GIRI_RAKSHAK_FULL_ESP32_TELEMETRY_V4 -->
+
+<div
+  id="full-esp32-telemetry"
+  style="
+    margin-top:10px;
+    padding:10px;
+    border-radius:8px;
+    background:#0f172a;
+    color:#f8fafc;
+  "
+>
+
+  <div
+    style="
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      margin-bottom:8px;
+    "
+  >
+
+    <div>
+
+      <div
+        style="
+          font-size:11px;
+          font-weight:800;
+          letter-spacing:.4px;
+        "
+      >
+        FULL ESP32 EDGE TELEMETRY
+      </div>
+
+      <div
+        id="full-esp32-status"
+        style="
+          margin-top:2px;
+          font-size:9px;
+          color:#94a3b8;
+        "
+      >
+        Waiting for live hardware data...
+      </div>
+
+    </div>
+
+    <span
+      id="full-esp32-live-badge"
+      style="
+        padding:4px 7px;
+        border-radius:5px;
+        background:#14532d;
+        color:#86efac;
+        font-size:8px;
+        font-weight:800;
+        white-space:nowrap;
+      "
+    >
+      LIVE
+    </span>
+
+  </div>
+
+
+  <div
+    id="full-esp32-grid"
+    style="
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:5px;
+    "
+  >
+
+    <!-- STATE -->
+
+    <div class="esp32-full-cell">
+      <span>Sensor ID</span>
+      <strong id="full-sensor-id">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Alert Level</span>
+      <strong id="full-alert-level">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>System State</span>
+      <strong id="full-system-state">—</strong>
+    </div>
+
+
+    <!-- LOCATION -->
+
+    <div class="esp32-full-cell">
+      <span>Latitude</span>
+      <strong id="full-lat">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Longitude</span>
+      <strong id="full-lon">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Updated</span>
+      <strong id="full-updated">—</strong>
+    </div>
+
+
+    <!-- TILT -->
+
+    <div class="esp32-full-cell">
+      <span>Tilt Angle</span>
+      <strong id="full-tilt">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Tilt Change</span>
+      <strong id="full-tilt-change">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Tilt Rate</span>
+      <strong id="full-tilt-rate">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Tilt 10s Change</span>
+      <strong id="full-tilt-10s">—</strong>
+    </div>
+
+
+    <!-- ACCEL -->
+
+    <div class="esp32-full-cell">
+      <span>Accel X</span>
+      <strong id="full-accel-x">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Accel Y</span>
+      <strong id="full-accel-y">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Accel Z</span>
+      <strong id="full-accel-z">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Accel Magnitude</span>
+      <strong id="full-accel-mag">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Accel Jump</span>
+      <strong id="full-accel-jump">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Vibration RMS</span>
+      <strong id="full-vibration">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Movement Ratio</span>
+      <strong id="full-movement">—</strong>
+    </div>
+
+
+    <!-- SOIL -->
+
+    <div class="esp32-full-cell">
+      <span>Soil Moisture</span>
+      <strong id="full-soil">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Soil Change</span>
+      <strong id="full-soil-change">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Soil Rate</span>
+      <strong id="full-soil-rate">—</strong>
+    </div>
+
+
+    <!-- DISTANCE -->
+
+    <div class="esp32-full-cell">
+      <span>Distance</span>
+      <strong id="full-distance">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Distance Change</span>
+      <strong id="full-distance-change">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Distance Rate</span>
+      <strong id="full-distance-rate">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Displacement</span>
+      <strong id="full-displacement">—</strong>
+    </div>
+
+
+    <!-- ENVIRONMENT -->
+
+    <div class="esp32-full-cell">
+      <span>BMP Pressure</span>
+      <strong id="full-pressure">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>DHT Temperature</span>
+      <strong id="full-temperature">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Humidity</span>
+      <strong id="full-humidity">—</strong>
+    </div>
+
+    <div class="esp32-full-cell">
+      <span>Rainfall</span>
+      <strong id="full-rainfall">—</strong>
+    </div>
+
+  </div>
+
+</div>
+
+</section>
 
         <!-- ================= SHAP / RISK INFERENCE CARD ================= -->
         <section class="card" style="margin-top: 14px;">
@@ -522,3 +762,41 @@
 </body>
 
 </html>
+
+<style>
+/* GIRI_RAKSHAK_FULL_ESP32_TELEMETRY_STYLE */
+
+#full-esp32-telemetry .esp32-full-cell {
+  min-width:0;
+  padding:6px 7px;
+  border-radius:6px;
+  background:#182235;
+  border:1px solid #26344d;
+  box-sizing:border-box;
+}
+
+#full-esp32-telemetry .esp32-full-cell span {
+  display:block;
+  margin-bottom:2px;
+  color:#94a3b8;
+  font-size:8px;
+  line-height:1.15;
+}
+
+#full-esp32-telemetry .esp32-full-cell strong {
+  display:block;
+  color:#f8fafc;
+  font-size:10px;
+  line-height:1.2;
+  word-break:break-word;
+}
+
+@media (max-width:700px) {
+
+  #full-esp32-grid {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+
+}
+
+</style>

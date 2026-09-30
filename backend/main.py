@@ -1,4 +1,5 @@
 import os
+from sqlalchemy import inspect, text
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -16,6 +17,64 @@ from routes.devices import router as devices_router
 from routes.risk import router as risk_router
 from routes.sensors import router as sensors_router
 from routes.susceptibility import router as susceptibility_router
+
+
+# ============================================================
+# DATABASE SCHEMA COMPATIBILITY
+# ============================================================
+
+def ensure_schema_compatibility():
+
+    Base.metadata.create_all(
+        bind=engine
+    )
+
+    inspector = inspect(
+        engine
+    )
+
+    additions = {
+        "sensor_readings": {
+            "telemetry_json": "TEXT",
+            "alert_level": "VARCHAR(20)",
+            "system_state": "VARCHAR(30)",
+        },
+        "alerts": {
+            "source": "VARCHAR(30)",
+            "is_active": "BOOLEAN",
+        },
+    }
+
+    with engine.begin() as conn:
+
+        for table_name, columns in additions.items():
+
+            if not inspector.has_table(
+                table_name
+            ):
+                continue
+
+            existing = {
+                column["name"]
+                for column in inspector.get_columns(
+                    table_name
+                )
+            }
+
+            for column_name, column_type in columns.items():
+
+                if column_name not in existing:
+
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE {table_name} "
+                            f"ADD COLUMN {column_name} "
+                            f"{column_type}"
+                        )
+                    )
+
+
+ensure_schema_compatibility()
 
 app = FastAPI(
     title="GiriRakshak API",

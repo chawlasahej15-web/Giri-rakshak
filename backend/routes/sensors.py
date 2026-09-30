@@ -1,499 +1,783 @@
 import json
-import sys
 from datetime import datetime
-from functools import lru_cache
-from pathlib import Path
 
-import pandas as pd
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
-
-# ============================================================
-# REPOSITORY PATH
-# ============================================================
-
-REPO_ROOT = (
-    Path(__file__)
-    .resolve()
-    .parents[2]
-)
-
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(
-        0,
-        str(REPO_ROOT)
-    )
-
-
-# ============================================================
-# BACKEND IMPORTS
-# ============================================================
-
 from database import get_db
-from models import (
-    SensorReading,
-    Alert,
-    RiskScore,
-    DeviceToken,
-)
-
-from ml.src.predict import predict_risk
+from models import Alert, DeviceToken, SensorReading
 from alerts.twilio_service import send_configured_alert
 from fcm_service import send_push_notification
+
 router = APIRouter(
     prefix="/api",
-    tags=["Sensors"]
+    tags=["Sensors"],
 )
 
 
-# ============================================================
-# SENSOR REQUEST MODEL
-# ============================================================
-
 class SensorData(BaseModel):
+
+    model_config = ConfigDict(
+        extra="ignore"
+    )
 
     sensor_id: str
 
     lat: float
     lon: float
 
+    # MPU / TILT
     tilt_deg: float
+    tilt_change_deg: float | None = None
+    tilt_rate_dph: float | None = None
+    tilt_sudden_change_10s_deg: float | None = None
+
+    # ACCEL / MOVEMENT
+    accel_x_g: float | None = None
+    accel_y_g: float | None = None
+    accel_z_g: float | None = None
+    accel_magnitude_g: float | None = None
+    accel_jump_g: float | None = None
+    vibration_rms_g: float | None = None
+    movement_ratio: float | None = None
+
+    # SOIL
     moisture_pct: float
-    displacement_cm: float
+    moisture_change_pct: float | None = None
+    moisture_rate_pph: float | None = None
+
+    # DISTANCE
+    distance_cm: float | None = None
+    distance_change_cm: float | None = None
+    distance_rate_cmh: float | None = None
+    displacement_cm: float | None = None
+
+    # ENVIRONMENT
+    pressure_hpa: float | None = None
+    temperature_c: float | None = None
+    humidity_pct: float | None = None
+    rainfall_mm: float | None = None
+
+    # EDGE ALERT
+    alert_level: str = "NORMAL"
+    system_state: str = "NORMAL"
 
     timestamp: datetime
 
 
-# ============================================================
-# DEMO RAINFALL LOOKUP
-# ============================================================
+def _json_safe(value):
 
-@lru_cache(maxsize=1)
-def load_demo_rainfall():
+    if value is None:
+        return None
 
-    path = (
-        REPO_ROOT
-        / "ml"
-        / "data"
-        / "demo"
-        / "demo_rainfall.csv"
-    )
+    try:
+        number = float(value)
 
-    if not path.exists():
+        if (
+            number != number
+            or number in (
+                float("inf"),
+                float("-inf"),
+            )
+        ):
+            return None
 
-        raise FileNotFoundError(
-            f"Demo rainfall file not found:\n{path}"
-        )
+    except (TypeError, ValueError):
+        return value
 
-    df = pd.read_csv(
-        path
-    )
-
-    required = [
-        "zone_id",
-        "rainfall_1d",
-        "rainfall_3d",
-        "rainfall_7d",
-        "rainfall_15d",
-    ]
-
-    missing = [
-        column
-        for column in required
-        if column not in df.columns
-    ]
-
-    if missing:
-
-        raise ValueError(
-            "demo_rainfall.csv is missing columns:\n"
-            + "\n".join(missing)
-        )
-
-    df["zone_id"] = (
-        df["zone_id"]
-        .astype(str)
-    )
-
-    if df["zone_id"].duplicated().any():
-
-        raise ValueError(
-            "Duplicate zone_id values found "
-            "in demo_rainfall.csv."
-        )
-
-    return df.set_index(
-        "zone_id"
-    )
+    return value
 
 
-# ============================================================
-# SENSOR ENDPOINT
-# ============================================================
-
-@router.post("/sensor-data")
-def receive_sensor_data(
+def _telemetry_dict(
     data: SensorData,
-    db: Session = Depends(get_db),
+) -> dict:
+
+    payload = data.model_dump()
+
+    for field in (
+        "sensor_id",
+        "lat",
+        "lon",
+        "timestamp",
+    ):
+        payload.pop(field, None)
+
+    return {
+        key: _json_safe(value)
+        for key, value in payload.items()
+    }
+
+
+def _reading_payload(
+    reading: SensorReading,
+) -> dict:
+
+    telemetry = {}
+
+    telemetry_json = getattr(
+        reading,
+        "telemetry_json",
+        None,
+    )
+
+    if telemetry_json:
+
+        try:
+            telemetry = json.loads(
+                telemetry_json
+            )
+
+        except (
+            TypeError,
+            json.JSONDecodeError,
+        ):
+            telemetry = {}
+
+    result = {
+
+        "id": reading.id,
+
+        "sensor_id": reading.sensor_id,
+
+        "lat": reading.lat,
+
+        "lon": reading.lon,
+
+        "tilt_deg": reading.tilt_deg,
+
+        "moisture_pct": reading.moisture_pct,
+
+        "displacement_cm":
+            reading.displacement_cm,
+
+        "alert_level":
+            getattr(
+                reading,
+                "alert_level",
+                None,
+            ),
+
+        "system_state":
+            getattr(
+                reading,
+                "system_state",
+                None,
+            ),
+
+        "timestamp":
+            reading.timestamp.isoformat(),
+    }
+
+    result.update(
+        telemetry
+    )
+
+    return result
+
+
+def _severity_rank(
+    level: str,
+) -> int:
+
+    return {
+        "normal": 0,
+        "watch": 1,
+        "warning": 2,
+        "critical": 3,
+        "very_high": 4,
+    }.get(
+        str(level).strip().lower(),
+        0,
+    )
+
+
+def _build_sensor_alert_message(
+    data: SensorData,
+) -> str:
+
+    level = (
+        data.alert_level
+        .strip()
+        .upper()
+    )
+
+    reasons = []
+
+    if (
+        data.tilt_change_deg is not None
+        and abs(
+            data.tilt_change_deg
+        ) >= 0.5
+    ):
+        reasons.append(
+            f"tilt change "
+            f"{data.tilt_change_deg:+.2f}°"
+        )
+
+    if (
+        data.tilt_rate_dph is not None
+        and abs(
+            data.tilt_rate_dph
+        ) >= 5.0
+    ):
+        reasons.append(
+            f"tilt rate "
+            f"{data.tilt_rate_dph:+.1f}°/h"
+        )
+
+    if (
+        data.tilt_sudden_change_10s_deg
+        is not None
+        and abs(
+            data.tilt_sudden_change_10s_deg
+        ) >= 0.5
+    ):
+        reasons.append(
+            f"10s tilt change "
+            f"{data.tilt_sudden_change_10s_deg:+.2f}°"
+        )
+
+    if (
+        data.movement_ratio is not None
+        and data.movement_ratio >= 3.0
+    ):
+        reasons.append(
+            f"movement ratio "
+            f"{data.movement_ratio:.1f}x"
+        )
+
+    if (
+        data.moisture_change_pct
+        is not None
+        and data.moisture_change_pct >= 2.0
+    ):
+        reasons.append(
+            f"soil change "
+            f"{data.moisture_change_pct:.1f}%"
+        )
+
+    if (
+        data.distance_change_cm
+        is not None
+        and abs(
+            data.distance_change_cm
+        ) >= 0.75
+    ):
+        reasons.append(
+            f"distance change "
+            f"{data.distance_change_cm:+.2f} cm"
+        )
+
+    if not reasons:
+        reasons.append(
+            "ESP32 edge-condition logic "
+            "reported an active alert"
+        )
+
+    return (
+        f"Giri-Rakshak {level} SENSOR ALERT: "
+        + "; ".join(reasons)
+        + f". Zone: {data.sensor_id}"
+    )
+
+
+def _send_sensor_notifications(
+    db: Session,
+    alert: Alert,
+) -> dict:
+
+    sms_result = (
+        send_configured_alert(
+            alert.message
+        )
+    )
+
+    official_devices = (
+        db.query(
+            DeviceToken
+        )
+        .filter(
+            DeviceToken.role
+            == "official"
+        )
+        .all()
+    )
+
+    push_results = []
+
+    for device in official_devices:
+
+        try:
+
+            result = (
+                send_push_notification(
+                    token=device.token,
+
+                    title=(
+                        "Giri Rakshak: "
+                        + alert.risk_level.upper()
+                    ),
+
+                    body=alert.message,
+
+                    data={
+                        "zone_id":
+                            alert.zone_id,
+
+                        "risk_level":
+                            alert.risk_level,
+
+                        "source":
+                            "sensor",
+                    },
+                )
+            )
+
+            push_results.append({
+
+                "device_id":
+                    device.id,
+
+                "success":
+                    bool(
+                        result.get(
+                            "success"
+                        )
+                    ),
+
+                "message_id":
+                    result.get(
+                        "message_id"
+                    ),
+
+                "error":
+                    result.get(
+                        "error"
+                    ),
+            })
+
+        except Exception as exc:
+
+            push_results.append({
+
+                "device_id":
+                    device.id,
+
+                "success":
+                    False,
+
+                "message_id":
+                    None,
+
+                "error":
+                    str(exc),
+            })
+
+    return {
+
+        "sms_result":
+            sms_result,
+
+        "push_results":
+            push_results,
+    }
+
+
+def _sync_sensor_alert(
+    db: Session,
+    data: SensorData,
+) -> dict:
+
+    current_level = (
+        data.alert_level
+        .strip()
+        .lower()
+    )
+
+    # NORMAL closes only active sensor alerts.
+    if current_level in {
+        "",
+        "normal",
+        "none",
+    }:
+
+        closed = (
+            db.query(
+                Alert
+            )
+            .filter(
+
+                Alert.zone_id
+                == data.sensor_id,
+
+                Alert.source
+                == "sensor",
+
+                Alert.is_active.is_(
+                    True
+                ),
+            )
+            .update(
+                {
+                    "is_active":
+                        False,
+                },
+                synchronize_session=False,
+            )
+        )
+
+        return {
+            "created": False,
+            "closed": int(closed),
+            "alert": None,
+        }
+
+    active = (
+        db.query(
+            Alert
+        )
+        .filter(
+
+            Alert.zone_id
+            == data.sensor_id,
+
+            Alert.source
+            == "sensor",
+
+            Alert.is_active.is_(
+                True
+            ),
+        )
+        .order_by(
+            Alert.id.desc()
+        )
+        .first()
+    )
+
+    # Same level = same event.
+    # Do NOT create another alert.
+    if (
+        active
+        and
+        (
+            active.risk_level
+            or ""
+        ).lower()
+        == current_level
+    ):
+
+        return {
+            "created": False,
+            "closed": 0,
+            "alert": active,
+        }
+
+    # Severity changed.
+    if active:
+        active.is_active = False
+
+    alert = Alert(
+
+        zone_id=
+            data.sensor_id,
+
+        risk_level=
+            current_level,
+
+        source=
+            "sensor",
+
+        message=
+            _build_sensor_alert_message(
+                data
+            ),
+
+        is_active=
+            True,
+
+        timestamp=
+            data.timestamp,
+    )
+
+    db.add(
+        alert
+    )
+
+    db.flush()
+
+    notification_result = (
+        _send_sensor_notifications(
+            db,
+            alert,
+        )
+    )
+
+    return {
+
+        "created":
+            True,
+
+        "closed":
+            1 if active else 0,
+
+        "alert":
+            alert,
+
+        "notification_result":
+            notification_result,
+    }
+
+
+@router.post(
+    "/sensor-data"
+)
+def receive_sensor_data(
+
+    data: SensorData,
+
+    db: Session =
+        Depends(get_db),
 ):
 
-    # --------------------------------------------------------
-    # 1. Reactive sensor safety layer
-    # --------------------------------------------------------
-
-    reactive_alert = (
-        data.tilt_deg > 15.0
-        or
-        data.moisture_pct > 80.0
+    displacement = (
+        data.displacement_cm
     )
 
+    if (
+        displacement is None
+        and data.distance_change_cm
+        is not None
+    ):
 
-    # --------------------------------------------------------
-    # 2. Save raw sensor reading
-    # --------------------------------------------------------
+        displacement = abs(
+            data.distance_change_cm
+        )
 
     reading = SensorReading(
-        sensor_id=data.sensor_id,
-        lat=data.lat,
-        lon=data.lon,
-        tilt_deg=data.tilt_deg,
-        moisture_pct=data.moisture_pct,
-        displacement_cm=data.displacement_cm,
-        timestamp=data.timestamp,
+
+        sensor_id=
+            data.sensor_id,
+
+        lat=
+            data.lat,
+
+        lon=
+            data.lon,
+
+        tilt_deg=
+            data.tilt_deg,
+
+        moisture_pct=
+            data.moisture_pct,
+
+        displacement_cm=
+            (
+                displacement
+                if displacement is not None
+                else 0.0
+            ),
+
+        timestamp=
+            data.timestamp,
+
+        telemetry_json=
+            json.dumps(
+                _telemetry_dict(
+                    data
+                ),
+                separators=(
+                    ",",
+                    ":",
+                ),
+            ),
+
+        alert_level=
+            data.alert_level
+            .strip()
+            .lower(),
+
+        system_state=
+            data.system_state
+            .strip()
+            .lower(),
     )
 
     db.add(
         reading
     )
 
-
-    # --------------------------------------------------------
-    # 3. Reactive alert
-    # --------------------------------------------------------
-    if reactive_alert:
-
-        alert_message = (
-            "Giri-Rakshak CRITICAL ALERT: "
-            "Abnormal sensor threshold detected. "
-            f"Zone: {data.sensor_id}"
+    alert_result = (
+        _sync_sensor_alert(
+            db,
+            data,
         )
-        alert = Alert(
-            zone_id=data.sensor_id,
-            risk_level="critical",
-            message=alert_message,
-            timestamp=data.timestamp,
-        )
-
-        db.add(alert)
-
-        # Send SMS alert
-        sms_result = send_configured_alert(alert_message)
-
-        print("Reactive SMS Result:", sms_result)
-        # Send push notification to registered official devices
-        official_devices = (
-            db.query(DeviceToken)
-            .filter(DeviceToken.role == "official")
-            .all()
-        )
-
-        for device in official_devices:
-            try:
-                push_result = send_push_notification(
-                    device.token,
-                    "Giri-Rakshak Critical Alert",
-                    alert_message,
-                    {"zone_id": data.sensor_id, "risk_level": "critical"},
-                )
-                print("Reactive Push Result:", push_result)
-            except Exception as e:
-                print("Reactive Push Error:", str(e))
-    # --------------------------------------------------------
-    # 4. ML prediction
-    # --------------------------------------------------------
-
-    ml_result = None
-    ml_error = None
-
-
-    try:
-
-        rainfall = load_demo_rainfall()
-
-
-        zone_id = str(
-            data.sensor_id
-        )
-
-
-        if zone_id not in rainfall.index:
-
-            raise ValueError(
-                f"No rainfall scenario configured "
-                f"for zone {zone_id}."
-            )
-
-
-        rainfall_row = (
-            rainfall.loc[
-                zone_id
-            ]
-        )
-
-
-        ml_result = predict_risk(
-
-            zone_id=zone_id,
-
-            rainfall_1d=float(
-                rainfall_row[
-                    "rainfall_1d"
-                ]
-            ),
-
-            rainfall_3d=float(
-                rainfall_row[
-                    "rainfall_3d"
-                ]
-            ),
-
-            rainfall_7d=float(
-                rainfall_row[
-                    "rainfall_7d"
-                ]
-            ),
-
-            rainfall_15d=float(
-                rainfall_row[
-                    "rainfall_15d"
-                ]
-            ),
-
-            include_explanations=True,
-        )
-
-
-        # ----------------------------------------------------
-        # 5. Save ML risk score
-        # ----------------------------------------------------
-
-        risk_record = RiskScore(
-            zone_id=zone_id,
-
-            risk_score=float(
-                ml_result[
-                    "risk_score"
-                ]
-            ),
-
-            risk_level=str(
-                ml_result[
-                    "risk_level"
-                ]
-            ),
-
-            top_factors=json.dumps(
-                ml_result[
-                    "top_factors"
-                ]
-            ),
-
-            timestamp=data.timestamp,
-        )
-
-        db.add(
-            risk_record
-        )
-
-
-        # ----------------------------------------------------
-        # 6. ML high-risk alert
-        # ----------------------------------------------------
-
-        if (
-            float(
-                ml_result["p_final"]
-            )
-            >= 0.80
-        ):
-
-            ml_alert = Alert(
-                zone_id=zone_id,
-
-                risk_level="very_high",
-
-                message=(
-                    "ML warning: "
-                    f"predicted landslide risk "
-                    f"is {ml_result['risk_score']:.1f}%."
-                ),
-
-                timestamp=data.timestamp,
-            )
-
-            db.add(
-                ml_alert
-            )
-            # Send push notification to registered official devices
-            official_devices = (
-                db.query(DeviceToken)
-                .filter(DeviceToken.role == "official")
-                .all()
-            )
-
-            for device in official_devices:
-                try:
-                    push_result = send_push_notification(
-                        device.token,
-                        "Giri-Rakshak ML Risk Alert",
-                        ml_alert.message,
-                        {
-                            "zone_id": str(zone_id),
-                            "risk_level": "very_high",
-                        },
-                    )
-                    print("ML Push Result:", push_result)
-                except Exception as e:
-                    print("ML Push Error:", str(e))
-
-
-    except Exception as exc:
-
-        ml_error = str(
-            exc
-        )
-
-
-    # --------------------------------------------------------
-    # 7. Commit all DB changes
-    # --------------------------------------------------------
+    )
 
     db.commit()
 
-
-    # --------------------------------------------------------
-    # 8. Response
-    # --------------------------------------------------------
+    db.refresh(
+        reading
+    )
 
     response = {
-        "status": "received",
 
-        "reactive_alert_triggered":
-            reactive_alert,
+        "status":
+            "received",
 
-        "ml_prediction_generated":
-            ml_result is not None,
+        "sensor_id":
+            data.sensor_id,
+
+        "alert_created":
+            bool(
+                alert_result.get(
+                    "created"
+                )
+            ),
+
+        "active_alert_level":
+            data.alert_level
+            .strip()
+            .lower(),
+
+        "system_state":
+            data.system_state
+            .strip()
+            .lower(),
+
+        "reading":
+            _reading_payload(
+                reading
+            ),
     }
 
+    if (
+        alert_result.get(
+            "alert"
+        )
+        is not None
+    ):
 
-    if ml_result is not None:
+        alert = (
+            alert_result[
+                "alert"
+            ]
+        )
 
-        response.update({
+        response["alert"] = {
 
-            "p_static":
-                ml_result[
-                    "p_static"
-                ],
-
-            "p_dynamic":
-                ml_result[
-                    "p_dynamic"
-                ],
-
-            "p_final":
-                ml_result[
-                    "p_final"
-                ],
-
-            "risk_score":
-                ml_result[
-                    "risk_score"
-                ],
+            "id":
+                alert.id,
 
             "risk_level":
-                ml_result[
-                    "risk_level"
-                ],
+                alert.risk_level,
 
-        })
+            "source":
+                alert.source,
 
+            "message":
+                alert.message,
 
-    if ml_error is not None:
+            "is_active":
+                alert.is_active,
 
-        response[
-            "ml_error"
-        ] = ml_error
-
+            "timestamp":
+                (
+                    alert.timestamp.isoformat()
+                    if alert.timestamp
+                    else None
+                ),
+        }
 
     return response
-# ============================================================
-# LATEST SENSOR READING
-# ============================================================
 
-@router.get("/sensor-data/latest")
+
+@router.get(
+    "/sensor-data/latest"
+)
 def get_latest_sensor_data(
-    db: Session = Depends(get_db),
+    db: Session =
+        Depends(get_db),
 ):
+
     reading = (
-        db.query(SensorReading)
-        .order_by(SensorReading.timestamp.desc())
+        db.query(
+            SensorReading
+        )
+        .order_by(
+            SensorReading.id.desc()
+        )
         .first()
     )
 
     if reading is None:
+
         return {
-            "status": "no_data",
-            "reading": None,
+            "status":
+                "no_data",
+
+            "reading":
+                None,
         }
 
     return {
-        "status": "ok",
-        "reading": {
-            "id": reading.id,
-            "sensor_id": reading.sensor_id,
-            "lat": reading.lat,
-            "lon": reading.lon,
-            "tilt_deg": reading.tilt_deg,
-            "moisture_pct": reading.moisture_pct,
-            "displacement_cm": reading.displacement_cm,
-            "timestamp": reading.timestamp.isoformat(),
-        },
+
+        "status":
+            "ok",
+
+        "reading":
+            _reading_payload(
+                reading
+            ),
     }
-# ============================================================
-# LATEST SENSOR READING FOR A SPECIFIC SENSOR / ZONE
-# ============================================================
 
-@router.get("/sensor-data/latest/{sensor_id}")
+
+@router.get(
+    "/sensor-data/latest/{sensor_id}"
+)
 def get_latest_sensor_data_for_zone(
+
     sensor_id: str,
-    db: Session = Depends(get_db),
+
+    db: Session =
+        Depends(get_db),
 ):
+
     reading = (
-        db.query(SensorReading)
-        .filter(SensorReading.sensor_id == sensor_id)
-        .order_by(SensorReading.timestamp.desc())
+        db.query(
+            SensorReading
+        )
+        .filter(
+            SensorReading.sensor_id
+            == sensor_id
+        )
+        .order_by(
+            SensorReading.id.desc()
+        )
         .first()
     )
 
     if reading is None:
+
         return {
-            "status": "no_data",
-            "reading": None,
-            "sensor_id": sensor_id,
+
+            "status":
+                "no_data",
+
+            "reading":
+                None,
+
+            "sensor_id":
+                sensor_id,
         }
 
     return {
-        "status": "ok",
-        "reading": {
-            "id": reading.id,
-            "sensor_id": reading.sensor_id,
-            "lat": reading.lat,
-            "lon": reading.lon,
-            "tilt_deg": reading.tilt_deg,
-            "moisture_pct": reading.moisture_pct,
-            "displacement_cm": reading.displacement_cm,
-            "timestamp": reading.timestamp.isoformat(),
-        },
+
+        "status":
+            "ok",
+
+        "reading":
+            _reading_payload(
+                reading
+            ),
     }

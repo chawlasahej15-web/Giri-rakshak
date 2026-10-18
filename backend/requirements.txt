@@ -34,3 +34,4 @@ rio-tiler
 firebase-admin
 
 lightgbm==4.7.0
+tinyfish

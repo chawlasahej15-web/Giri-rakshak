@@ -29,9 +29,10 @@ pandas>=2.2,<4
 xgboost==3.4.1
 twilio
 python-dotenv
-
+requests
 rio-tiler
 firebase-admin
-
 lightgbm==4.7.0
 tinyfish
+google-genai
+google-generativeai

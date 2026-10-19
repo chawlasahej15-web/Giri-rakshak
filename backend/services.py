@@ -132,20 +132,16 @@ def should_create_alert(
 # ==============================================================================
 
 def get_chatbot_response(user_query: str, user_role: str = "citizen", context_data: dict = None) -> dict:
-    # 1. Bypass OS environment caching entirely by parsing the .env file directly
+    # 1. Safely load local .env if present, otherwise default to empty dict
     env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
-    local_env = dotenv_values(env_path)
+    local_env = dotenv_values(env_path) if os.path.exists(env_path) else {}
     
-    tinyfish_key = local_env.get("TINYFISH_API_KEY")
-    gemini_key = local_env.get("GEMINI_API_KEY")
-
-    # Final hackathon fallback: If even this fails, uncomment the two lines below 
-    # and paste your raw keys inside the quotes so you can finish your demo.
-    # tinyfish_key = "sk-tinyfish-..."
-    # gemini_key = "AQ..."
+    # 2. Check system environment first (for Render), fallback to local_env
+    tinyfish_key = os.getenv("TINYFISH_API_KEY") or local_env.get("TINYFISH_API_KEY")
+    gemini_key = os.getenv("GEMINI_API_KEY") or local_env.get("GEMINI_API_KEY")
 
     if not tinyfish_key:
-        return {"reply": f"Still failing to read keys. Please uncomment the fallback variables in services.py."}
+        return {"reply": "Still failing to read keys. Please check Render environment variables."}
 
     ai_client = genai.Client(api_key=gemini_key) if gemini_key else None
 
@@ -198,7 +194,8 @@ def get_chatbot_response(user_query: str, user_role: str = "citizen", context_da
                 )
                 return {"reply": response.text.strip(), "sources": sources}
             except Exception as gemini_err:
-                if any(err_code in str(gemini_err) for err_code in ["429", "RESOURCE_EXHAUSTED", "Quota"]):
+                # Fallback to search results if Gemini goes down or quotas are exceeded
+                if any(err_code in str(gemini_err) for err_code in ["429", "RESOURCE_EXHAUSTED", "Quota", "503", "UNAVAILABLE"]):
                     return {"reply": f"**Giri Rakshak Live Ground Updates:**\n\n{raw_retrieval_text}", "sources": sources}
                 raise gemini_err
 

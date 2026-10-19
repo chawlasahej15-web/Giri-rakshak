@@ -4626,3 +4626,70 @@ if (
   }
 
 })();
+
+
+// ==========================================================================
+// TinyFish Chatbot UI Handler
+// ==========================================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  const toggleBtn = document.getElementById('chat-toggle-btn');
+  const closeBtn = document.getElementById('chat-close-btn');
+  const chatPopup = document.getElementById('chat-popup');
+  const sendBtn = document.getElementById('chat-send-btn');
+  const chatInput = document.getElementById('chat-input');
+  const messagesContainer = document.getElementById('chat-messages');
+
+  if (!toggleBtn) return;
+
+  // Toggle chat window
+  toggleBtn.addEventListener('click', () => chatPopup.classList.toggle('chat-popup-hidden'));
+  closeBtn.addEventListener('click', () => chatPopup.classList.add('chat-popup-hidden'));
+
+  async function handleSendMessage() {
+    const query = chatInput.value.trim();
+    if (!query) return;
+
+    // Render user message
+    messagesContainer.innerHTML += `<div class="msg user">${escapeHtml(query)}</div>`;
+    chatInput.value = '';
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // Loading message placeholder
+    const loadingId = `loading-${Date.now()}`;
+    messagesContainer.innerHTML += `<div class="msg bot" id="${loadingId}"><i>Searching live web via TinyFish...</i></div>`;
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    try {
+      // Pass logged-in role dynamically if available, otherwise default to "citizen"
+      const currentRole = window.currentUserRole || "citizen";
+      
+     const response = await fetch(`${getApiBase()}/api/chatbot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query, role: currentRole })
+      });
+
+      const data = await response.json();
+      const loadingElem = document.getElementById(loadingId);
+      if (loadingElem) {
+        loadingElem.innerText = data.reply || "No response received.";
+      }
+    } catch (err) {
+      const loadingElem = document.getElementById(loadingId);
+      if (loadingElem) {
+        loadingElem.innerText = "Error connecting to TinyFish AI backend.";
+      }
+    }
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+
+  sendBtn.addEventListener('click', handleSendMessage);
+  chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleSendMessage();
+  });
+
+  function escapeHtml(text) {
+    return text.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
+  }
+});

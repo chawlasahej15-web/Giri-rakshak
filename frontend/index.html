@@ -756,8 +756,37 @@
     </div>
   </div>
 
+  <!-- GIRI RAKSHAK AI CHATBOT WIDGET (TINYFISH INTEGRATION) -->
+  <div id="tinyfish-chat-widget">
+    <button id="chat-toggle-btn" title="Ask Giri Rakshak AI">
+      💬
+    </button>
+
+    <div id="chat-popup" class="chat-popup-hidden">
+      <div class="chat-header">
+        <div class="chat-header-title">
+          <span class="status-indicator"></span>
+          <strong>Giri Rakshak AI</strong>
+          <small style="font-size: 10px; opacity: 0.8; display: block;">Powered by TinyFish Web Engine</small>
+        </div>
+        <button id="chat-close-btn">&times;</button>
+      </div>
+      
+      <div id="chat-messages" class="chat-messages">
+        <div class="msg bot">
+          👋 Hello! I am your AI assistant powered by TinyFish. Ask me about real-time weather advisories, road updates, or disaster reports in North East India.
+        </div>
+      </div>
+
+      <div class="chat-input-area">
+        <input type="text" id="chat-input" placeholder="Type a message..." />
+        <button id="chat-send-btn">Send</button>
+      </div>
+    </div>
+  </div>
+
   <script src="susceptibility_cell_click.js"></script>
-<script src="dashboard.js"></script>
+  <script src="dashboard.js"></script>
   <script src="susceptibility.js"></script>
 </body>
 

@@ -1165,3 +1165,151 @@ body.role-citizen .static-susceptibility-panel {
 body.role-citizen .system-status-pill {
   display: none !important;
 }
+
+/* ==========================================================================
+   Giri Rakshak AI Chatbot - TinyFish Theme
+   ========================================================================== */
+
+#tinyfish-chat-widget {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  font-family: inherit;
+}
+
+#chat-toggle-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: #0284c7; /* Exact header primary blue */
+  color: #ffffff;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
+  transition: transform 0.2s, background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#chat-toggle-btn:hover {
+  background-color: #0369a1;
+  transform: scale(1.05);
+}
+
+.chat-popup-hidden {
+  display: none !important;
+}
+
+#chat-popup {
+  width: 360px;
+  height: 480px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  bottom: 70px;
+  right: 0;
+  overflow: hidden;
+}
+
+.chat-header {
+  background-color: #0f172a; /* Dark navy brand color */
+  color: #ffffff;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  background-color: #22c55e;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+#chat-close-btn {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.chat-messages {
+  flex: 1;
+  padding: 14px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background-color: #f8fafc;
+  font-size: 13px;
+}
+
+.msg {
+  padding: 10px 12px;
+  border-radius: 8px;
+  max-width: 85%;
+  line-height: 1.4;
+  white-space: pre-line;
+}
+
+.msg.user {
+  align-self: flex-end;
+  background-color: #0284c7;
+  color: #ffffff;
+  border-bottom-right-radius: 2px;
+}
+
+.msg.bot {
+  align-self: flex-start;
+  background-color: #ffffff;
+  color: #1e293b;
+  border: 1px solid #e2e8f0;
+  border-bottom-left-radius: 2px;
+}
+
+.chat-input-area {
+  display: flex;
+  padding: 10px;
+  background-color: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  gap: 6px;
+}
+
+#chat-input {
+  flex: 1;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  outline: none;
+}
+
+#chat-input:focus {
+  border-color: #0284c7;
+}
+
+#chat-send-btn {
+  background-color: #0284c7;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#chat-send-btn:hover {
+  background-color: #0369a1;
+}
